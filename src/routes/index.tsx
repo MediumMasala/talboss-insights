@@ -642,50 +642,6 @@ function Metrics({
   );
 }
 
-/* ---------- Stage Analytics ---------- */
-function StageAnalytics({ stats, total }: { stats: Record<Stage, number>; total: number }) {
-  const max = Math.max(1, ...Object.values(stats));
-  return (
-    <div className="mt-4 bg-surface border border-border rounded-xl p-5">
-      <div className="flex items-baseline justify-between mb-4">
-        <div>
-          <h3 className="text-sm font-semibold tracking-tight">Funnel by stage</h3>
-          <p className="text-[11px] text-muted-foreground mt-0.5">
-            Boss distribution across the pipeline
-          </p>
-        </div>
-        <span className="text-xs text-muted-foreground font-mono">{total} bosses</span>
-      </div>
-      <div className="grid grid-cols-6 gap-3">
-        {STAGES.map((s, i) => {
-          const v = stats[s];
-          const pct = total ? Math.round((v / total) * 100) : 0;
-          const h = `${(v / max) * 100}%`;
-          return (
-            <div key={s} className="flex flex-col">
-              <div className="relative h-24 bg-surface-elevated rounded-md overflow-hidden flex items-end">
-                <div
-                  className="w-full bg-primary/80 transition-all"
-                  style={{ height: v ? h : "4px" }}
-                />
-                <span className="absolute top-1.5 right-2 text-[10px] font-mono text-muted-foreground">
-                  {pct}%
-                </span>
-              </div>
-              <div className="mt-2 flex items-center justify-between">
-                <span className="text-[10px] font-semibold text-foreground/80 truncate">
-                  <span className="text-muted-foreground mr-1 font-mono">{i + 1}</span>
-                  {s}
-                </span>
-                <span className="text-xs font-mono font-bold">{v}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 function SectionHeader({ title, subtitle }: { title: string; subtitle: string }) {
   return (
