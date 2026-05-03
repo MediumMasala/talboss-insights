@@ -72,18 +72,6 @@ function Dashboard() {
     });
   }, [view, me, search, stageFilter, statusFilter, sentimentFilter, verifiedOnly]);
 
-  const stageStats = useMemo(() => {
-    const map: Record<Stage, number> = {
-      "Job Creation": 0,
-      Verification: 0,
-      Talking: 0,
-      Interview: 0,
-      Hiring: 0,
-      Closing: 0,
-    };
-    filtered.forEach((b) => (map[b.stage] += 1));
-    return map;
-  }, [filtered]);
 
   const metrics = useMemo(() => {
     const total = filtered.length;
