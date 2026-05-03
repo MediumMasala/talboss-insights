@@ -126,32 +126,266 @@ function Dashboard() {
 
       <main className="px-6 py-6 max-w-[1600px] mx-auto">
         <Metrics metrics={metrics} />
-        <StageAnalytics stats={stageStats} total={filtered.length} />
 
-        {view === "all" ? (
-          <section className="mt-8">
-            <SectionHeader title="All bosses" subtitle={`${filtered.length} matches`} />
+        <div className="mt-6 flex items-center justify-between">
+          <SectionHeader
+            title={view === "all" ? "All bosses" : `My bosses · ${me}`}
+            subtitle={`${filtered.length} matches`}
+          />
+          <LayoutToggle layout={layout} setLayout={setLayout} />
+        </div>
+
+        {layout === "grid" ? (
+          view === "all" ? (
             <BossGrid bosses={filtered} onOpen={setSelected} />
-          </section>
+          ) : (
+            <div className="grid gap-8">
+              <section>
+                <SubHead title="Open" count={myOpen.length} />
+                <BossGrid bosses={myOpen} onOpen={setSelected} />
+              </section>
+              <section>
+                <SubHead title="Closed" count={myClosed.length} />
+                {myClosed.length === 0 ? (
+                  <EmptyHint text="No closed chats yet." />
+                ) : (
+                  <BossGrid bosses={myClosed} onOpen={setSelected} />
+                )}
+              </section>
+            </div>
+          )
         ) : (
-          <div className="grid gap-8 mt-8">
-            <section>
-              <SectionHeader title="Open" subtitle={`${myOpen.length} active`} />
-              <BossGrid bosses={myOpen} onOpen={setSelected} />
-            </section>
-            <section>
-              <SectionHeader title="Closed" subtitle={`${myClosed.length} archived`} />
-              {myClosed.length === 0 ? (
-                <EmptyHint text="No closed chats yet." />
-              ) : (
-                <BossGrid bosses={myClosed} onOpen={setSelected} />
-              )}
-            </section>
-          </div>
+          <ChatLayout bosses={filtered} selected={selected} onOpen={setSelected} />
         )}
       </main>
 
-      {selected && <BossDrawer boss={selected} onClose={() => setSelected(null)} />}
+      {selected && layout === "grid" && (
+        <BossDrawer boss={selected} onClose={() => setSelected(null)} />
+      )}
+    </div>
+  );
+}
+
+function LayoutToggle({
+  layout,
+  setLayout,
+}: {
+  layout: "grid" | "chat";
+  setLayout: (l: "grid" | "chat") => void;
+}) {
+  return (
+    <div className="flex p-1 bg-surface rounded-lg border border-border">
+      {(["grid", "chat"] as const).map((l) => (
+        <button
+          key={l}
+          onClick={() => setLayout(l)}
+          className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
+            layout === l
+              ? "bg-surface-elevated text-foreground"
+              : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {l === "grid" ? "Grid" : "Chat split"}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SubHead({ title, count }: { title: string; count: number }) {
+  return (
+    <div className="flex items-baseline gap-2 mb-3">
+      <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+      <span className="text-[10px] font-mono text-muted-foreground">{count}</span>
+    </div>
+  );
+}
+
+/* ---------- Chat split layout (WhatsApp-style) ---------- */
+function ChatLayout({
+  bosses,
+  selected,
+  onOpen,
+}: {
+  bosses: Boss[];
+  selected: Boss | null;
+  onOpen: (b: Boss) => void;
+}) {
+  const active = selected && bosses.find((b) => b.id === selected.id) ? selected : bosses[0] ?? null;
+  return (
+    <div className="grid grid-cols-12 gap-4 h-[calc(100dvh-260px)] min-h-[560px] border border-border rounded-2xl overflow-hidden bg-surface">
+      {/* Left: boss list */}
+      <aside className="col-span-4 border-r border-border overflow-y-auto bg-surface">
+        {bosses.length === 0 ? (
+          <div className="p-6 text-sm text-muted-foreground">No bosses match.</div>
+        ) : (
+          <ul className="divide-y divide-border">
+            {bosses.map((b) => {
+              const s = statusMeta[b.status];
+              const isActive = active?.id === b.id;
+              return (
+                <li key={b.id}>
+                  <button
+                    onClick={() => onOpen(b)}
+                    className={`w-full text-left flex items-start gap-3 p-3 hover:bg-surface-elevated transition-colors ${
+                      isActive ? "bg-surface-elevated" : ""
+                    }`}
+                  >
+                    <div className="relative shrink-0">
+                      <div className="size-11 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-bold border border-primary/20">
+                        {initials(b.name)}
+                      </div>
+                      <span
+                        className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-surface ${s.dot}`}
+                      />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="font-semibold text-sm truncate">{b.name}</span>
+                        <span className="text-[10px] text-muted-foreground font-mono shrink-0">
+                          {b.lastActivity}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-muted-foreground truncate">
+                        {b.company} · {b.role}
+                      </div>
+                      <div className="flex items-center gap-1.5 mt-1">
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface border border-border text-muted-foreground">
+                          {b.stage}
+                        </span>
+                        {b.chatsOpen > 0 && (
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/20 font-bold">
+                            {b.chatsOpen}
+                          </span>
+                        )}
+                        {b.alert && (
+                          <span className="size-1.5 rounded-full bg-warn pulse-dot ml-auto" />
+                        )}
+                      </div>
+                    </div>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </aside>
+
+      {/* Right: chat summary panel */}
+      <section className="col-span-8 overflow-y-auto bg-background">
+        {active ? (
+          <ChatSummaryPanel boss={active} />
+        ) : (
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+            Select a boss to view chat
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function ChatSummaryPanel({ boss }: { boss: Boss }) {
+  const s = statusMeta[boss.status];
+  const owner = OWNERS.find((o) => o.initials === boss.ownerInitials);
+  return (
+    <div>
+      <div className="sticky top-0 bg-background/95 backdrop-blur-md border-b border-border p-4 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-bold border border-primary/20">
+            {initials(boss.name)}
+          </div>
+          <div>
+            <div className="font-semibold text-sm leading-tight">{boss.name}</div>
+            <div className="text-[11px] text-muted-foreground">
+              {boss.company} · {boss.role}
+            </div>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className={`size-2 rounded-full ${s.dot} ${boss.status === "active" ? "pulse-dot" : ""}`} />
+          <span className={`text-[10px] font-bold uppercase tracking-wider ${s.text}`}>{s.label}</span>
+          <span className="ml-2 size-7 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-bold border border-primary/20">
+            {boss.ownerInitials}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-5 space-y-5">
+        <div className="grid grid-cols-4 gap-2">
+          <Stat label="Roles" value={boss.rolesOpen} accent />
+          <Stat label="Open" value={boss.chatsOpen} />
+          <Stat label="Closed" value={boss.chatsClosed} />
+          <Stat label="Intent" value={`${boss.hiringIntent}%`} />
+        </div>
+
+        <div>
+          <Label>Chat summary</Label>
+          <p className="text-sm leading-relaxed p-3 rounded-lg bg-surface border-l-2 border-primary">
+            {boss.summary}
+          </p>
+        </div>
+
+        <div>
+          <Label>Recent messages</Label>
+          <div className="space-y-3">
+            {boss.conversation.map((m, i) => (
+              <div
+                key={i}
+                className={`flex flex-col gap-1 ${
+                  m.from === "ops" ? "items-end" : m.from === "system" ? "items-center" : "items-start"
+                }`}
+              >
+                <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+                  {m.from === "ops" ? "Ops" : m.from === "boss" ? boss.name : "System"} · {m.time}
+                </span>
+                <div
+                  className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${
+                    m.from === "system"
+                      ? "bg-transparent border border-dashed border-border text-muted-foreground text-xs"
+                      : m.from === "ops"
+                      ? "bg-primary text-primary-foreground rounded-tr-none"
+                      : "bg-surface border border-border rounded-tl-none"
+                  }`}
+                >
+                  {m.text}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <Label>Open roles · {boss.openRoles.length}</Label>
+          <div className="grid gap-2">
+            {boss.openRoles.map((r) => (
+              <div
+                key={r.id}
+                className="p-3 rounded-lg bg-surface border border-border flex items-start justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <div className="font-semibold text-sm truncate">{r.title}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5 truncate">
+                    {r.compensation} · {r.experience} · {r.location}
+                  </div>
+                </div>
+                <span className="shrink-0 text-[10px] font-bold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                  {r.candidates}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <Label>Candidate chats</Label>
+          <ChatsTab chats={boss.candidateChats} />
+        </div>
+
+        <div className="text-[11px] text-muted-foreground font-mono">
+          Owner: {owner?.name ?? boss.ownerInitials} · ID {boss.id}
+        </div>
+      </div>
     </div>
   );
 }
