@@ -534,43 +534,117 @@ function FilterBar(props: {
     setVerifiedOnly,
     count,
   } = props;
+  const [open, setOpen] = useState(false);
+
+  const activeCount =
+    (stageFilter !== "all" ? 1 : 0) +
+    (statusFilter !== "all" ? 1 : 0) +
+    (sentimentFilter !== "all" ? 1 : 0) +
+    (verifiedOnly ? 1 : 0);
+
+  const summary = [
+    stageFilter !== "all" ? stageFilter : null,
+    statusFilter !== "all" ? (statusFilter === "no_reply" ? "No reply" : statusFilter) : null,
+    sentimentFilter !== "all" ? sentimentFilter : null,
+    verifiedOnly ? "Verified" : null,
+  ].filter(Boolean) as string[];
+
+  const reset = () => {
+    setStageFilter("all");
+    setStatusFilter("all");
+    setSentimentFilter("all");
+    setVerifiedOnly(false);
+  };
+
   return (
-    <div className="px-6 py-3 border-b border-border bg-surface/40 flex flex-wrap items-center gap-2">
-      <Group label="Stage">
-        <Pill active={stageFilter === "all"} onClick={() => setStageFilter("all")}>All</Pill>
-        {STAGES.map((s) => (
-          <Pill key={s} active={stageFilter === s} onClick={() => setStageFilter(s)}>{s}</Pill>
-        ))}
-      </Group>
-      <Divider />
-      <Group label="Status">
-        {(["all", "active", "idle", "no_reply"] as const).map((s) => (
-          <Pill key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
-            {s === "all" ? "Any" : s === "no_reply" ? "No reply" : s[0].toUpperCase() + s.slice(1)}
-          </Pill>
-        ))}
-      </Group>
-      <Divider />
-      <Group label="Vibe">
-        {(["all", "happy", "neutral", "unhappy"] as const).map((s) => (
-          <Pill key={s} active={sentimentFilter === s} onClick={() => setSentimentFilter(s)}>
-            {s === "all" ? "Any" : s[0].toUpperCase() + s.slice(1)}
-          </Pill>
-        ))}
-      </Group>
-      <Divider />
-      <Pill active={verifiedOnly} onClick={() => setVerifiedOnly(!verifiedOnly)}>
-        Verified only
-      </Pill>
+    <div className="px-6 py-2.5 border-b border-border bg-surface/40 flex items-center gap-2 relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-surface hover:border-primary/40 transition-colors text-xs font-semibold"
+      >
+        <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <path d="M3 6h18M6 12h12M10 18h4" />
+        </svg>
+        Filters
+        {activeCount > 0 && (
+          <span className="size-4 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+            {activeCount}
+          </span>
+        )}
+      </button>
+
+      {summary.length > 0 && (
+        <div className="flex items-center gap-1 overflow-x-auto">
+          {summary.map((s) => (
+            <span
+              key={s}
+              className="text-[10px] font-semibold px-2 py-0.5 rounded bg-primary/10 text-primary border border-primary/20 capitalize whitespace-nowrap"
+            >
+              {s}
+            </span>
+          ))}
+          <button
+            onClick={reset}
+            className="text-[10px] text-muted-foreground hover:text-foreground ml-1"
+          >
+            Clear
+          </button>
+        </div>
+      )}
+
       <span className="ml-auto text-xs text-muted-foreground font-mono">{count} bosses</span>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute top-full left-6 mt-2 z-40 w-[420px] bg-surface border border-border rounded-xl shadow-xl p-4 space-y-3 animate-fade-in">
+            <Group label="Stage">
+              <Pill active={stageFilter === "all"} onClick={() => setStageFilter("all")}>All</Pill>
+              {STAGES.map((s) => (
+                <Pill key={s} active={stageFilter === s} onClick={() => setStageFilter(s)}>{s}</Pill>
+              ))}
+            </Group>
+            <Group label="Status">
+              {(["all", "active", "idle", "no_reply"] as const).map((s) => (
+                <Pill key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)}>
+                  {s === "all" ? "Any" : s === "no_reply" ? "No reply" : s[0].toUpperCase() + s.slice(1)}
+                </Pill>
+              ))}
+            </Group>
+            <Group label="Vibe">
+              {(["all", "happy", "neutral", "unhappy"] as const).map((s) => (
+                <Pill key={s} active={sentimentFilter === s} onClick={() => setSentimentFilter(s)}>
+                  {s === "all" ? "Any" : s[0].toUpperCase() + s.slice(1)}
+                </Pill>
+              ))}
+            </Group>
+            <Group label="More">
+              <Pill active={verifiedOnly} onClick={() => setVerifiedOnly(!verifiedOnly)}>
+                Verified only
+              </Pill>
+            </Group>
+            <div className="flex justify-between pt-2 border-t border-border">
+              <button onClick={reset} className="text-xs text-muted-foreground hover:text-foreground">
+                Reset all
+              </button>
+              <button
+                onClick={() => setOpen(false)}
+                className="text-xs font-semibold px-3 py-1 rounded-md bg-primary text-primary-foreground"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function Group({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-1.5">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mr-1">
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mr-1 w-12 shrink-0">
         {label}
       </span>
       {children}
