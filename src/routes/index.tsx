@@ -43,6 +43,7 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
 
 function Dashboard() {
   const [view, setView] = useState<View>("all");
+  const [layout, setLayout] = useState<"grid" | "chat">("grid");
   const [me, setMe] = useState<string>("YS");
   const [search, setSearch] = useState("");
   const [stageFilter, setStageFilter] = useState<Stage | "all">("all");
