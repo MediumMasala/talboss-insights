@@ -40,31 +40,31 @@
 
 :root {
   --radius: 0.75rem;
-  /* Single-accent palette: deep near-black + teal flow */
-  --background: oklch(0.16 0.01 260);
-  --foreground: oklch(0.92 0.005 260);
-  --surface: oklch(0.20 0.012 260);
-  --surface-elevated: oklch(0.235 0.013 260);
-  --card: oklch(0.20 0.012 260);
-  --card-foreground: oklch(0.92 0.005 260);
-  --popover: oklch(0.20 0.012 260);
-  --popover-foreground: oklch(0.92 0.005 260);
-  --primary: oklch(0.78 0.13 195);
-  --primary-foreground: oklch(0.16 0.01 260);
-  --secondary: oklch(0.27 0.013 260);
-  --secondary-foreground: oklch(0.92 0.005 260);
-  --muted: oklch(0.25 0.012 260);
-  --muted-foreground: oklch(0.65 0.012 260);
-  --accent: oklch(0.30 0.015 260);
-  --accent-foreground: oklch(0.95 0.005 260);
-  --destructive: oklch(0.62 0.20 20);
-  --destructive-foreground: oklch(0.98 0.005 260);
-  --border: oklch(0.30 0.012 260);
-  --input: oklch(0.27 0.012 260);
-  --ring: oklch(0.78 0.13 195);
-  --flow: oklch(0.78 0.13 195);
-  --stall: oklch(0.65 0.20 22);
-  --warn: oklch(0.78 0.14 75);
+  /* TalBoss palette: warm dark + TAL orange + cream */
+  --background: oklch(0.18 0.012 50);
+  --foreground: oklch(0.95 0.02 80);
+  --surface: oklch(0.22 0.015 50);
+  --surface-elevated: oklch(0.26 0.018 50);
+  --card: oklch(0.22 0.015 50);
+  --card-foreground: oklch(0.95 0.02 80);
+  --popover: oklch(0.22 0.015 50);
+  --popover-foreground: oklch(0.95 0.02 80);
+  --primary: oklch(0.72 0.19 45);
+  --primary-foreground: oklch(0.98 0.02 85);
+  --secondary: oklch(0.30 0.02 50);
+  --secondary-foreground: oklch(0.95 0.02 80);
+  --muted: oklch(0.28 0.015 50);
+  --muted-foreground: oklch(0.68 0.025 70);
+  --accent: oklch(0.32 0.025 50);
+  --accent-foreground: oklch(0.97 0.02 80);
+  --destructive: oklch(0.62 0.20 25);
+  --destructive-foreground: oklch(0.98 0.005 80);
+  --border: oklch(0.32 0.018 50);
+  --input: oklch(0.28 0.015 50);
+  --ring: oklch(0.72 0.19 45);
+  --flow: oklch(0.72 0.19 45);
+  --stall: oklch(0.62 0.20 25);
+  --warn: oklch(0.75 0.16 70);
 }
 
 @layer base {
