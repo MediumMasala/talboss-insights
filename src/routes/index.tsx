@@ -771,10 +771,13 @@ function Header({
         </div>
 
         {alerts > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-warn/30 bg-warn/10">
+          <button
+            onClick={onAlertsClick}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-warn/30 bg-warn/10 hover:bg-warn/15 transition-colors"
+          >
             <span className="size-1.5 rounded-full bg-warn pulse-dot" />
             <span className="text-xs font-semibold text-warn">{alerts} alerts</span>
-          </div>
+          </button>
         )}
 
         {/* Owner switcher */}
