@@ -480,6 +480,22 @@ function Header({
     location: "Location",
     owner: "Owner",
   };
+  const scopeHint: Record<SearchScope, string> = {
+    all: "Name, company, ID, location, owner",
+    name: "e.g. Marcus Thorne",
+    company: "e.g. Vento Systems",
+    id: "e.g. GR-99421",
+    location: "e.g. Bengaluru",
+    owner: "e.g. GJ or Gaurika",
+  };
+  const scopePlaceholder: Record<SearchScope, string> = {
+    all: "Search anything…",
+    name: "Search boss name…",
+    company: "Search company…",
+    id: "Search boss ID…",
+    location: "Search location…",
+    owner: "Search owner / team…",
+  };
 
   return (
     <header className="sticky top-0 z-40 h-16 border-b border-border bg-background/85 backdrop-blur-md px-6 flex items-center justify-between">
@@ -517,17 +533,17 @@ function Header({
 
       <div className="flex items-center gap-3">
         {/* Scoped search */}
-        <div className="relative flex items-center bg-surface border border-border rounded-lg overflow-hidden focus-within:ring-1 focus-within:ring-ring">
+        <div className="relative flex items-center bg-surface border border-border rounded-lg focus-within:ring-1 focus-within:ring-ring">
           <button
             onClick={() => setScopeOpen((o) => !o)}
-            className="flex items-center gap-1 pl-2 pr-2 h-9 text-[11px] font-semibold text-muted-foreground hover:text-foreground border-r border-border"
-            title="Search scope"
+            className="flex items-center gap-1 pl-2.5 pr-2 h-9 text-[11px] font-semibold text-primary hover:text-primary/80 border-r border-border rounded-l-lg"
+            title="Choose what to search by"
           >
             <span className="uppercase tracking-wider">{scopeLabel[scope]}</span>
-            <svg className="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
+            <svg className={`size-3 transition-transform ${scopeOpen ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
           </button>
           <svg
-            className="absolute left-[78px] top-2.5 size-4 text-muted-foreground pointer-events-none"
+            className="ml-2.5 size-4 text-muted-foreground pointer-events-none shrink-0"
             viewBox="0 0 24 24"
             fill="none"
             stroke="currentColor"
@@ -540,27 +556,39 @@ function Header({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             type="text"
-            placeholder={`Search by ${scopeLabel[scope].toLowerCase()}…`}
-            className="w-72 bg-transparent py-2 pl-8 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none"
+            placeholder={scopePlaceholder[scope]}
+            className="w-72 bg-transparent py-2 pl-2 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none"
           />
           {scopeOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setScopeOpen(false)} />
-              <div className="absolute top-full left-0 mt-1 z-40 w-40 bg-surface border border-border rounded-lg shadow-xl overflow-hidden">
-                {(Object.keys(scopeLabel) as SearchScope[]).map((k) => (
-                  <button
-                    key={k}
-                    onClick={() => {
-                      setScope(k);
-                      setScopeOpen(false);
-                    }}
-                    className={`w-full text-left px-3 py-2 text-xs hover:bg-surface-elevated ${
-                      scope === k ? "bg-surface-elevated text-foreground font-semibold" : "text-muted-foreground"
-                    }`}
-                  >
-                    {scopeLabel[k]}
-                  </button>
-                ))}
+              <div className="absolute top-full left-0 mt-1 z-40 w-64 bg-surface border border-border rounded-lg shadow-xl overflow-hidden">
+                <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-muted-foreground border-b border-border bg-surface-elevated/40">
+                  Search by…
+                </div>
+                {(Object.keys(scopeLabel) as SearchScope[]).map((k) => {
+                  const active = scope === k;
+                  return (
+                    <button
+                      key={k}
+                      onClick={() => {
+                        setScope(k);
+                        setScopeOpen(false);
+                      }}
+                      className={`w-full text-left px-3 py-2 hover:bg-surface-elevated flex items-center justify-between gap-2 ${
+                        active ? "bg-surface-elevated" : ""
+                      }`}
+                    >
+                      <div className="min-w-0">
+                        <div className={`text-xs font-semibold ${active ? "text-primary" : "text-foreground"}`}>
+                          {scopeLabel[k]}
+                        </div>
+                        <div className="text-[10px] text-muted-foreground truncate">{scopeHint[k]}</div>
+                      </div>
+                      {active && <span className="text-primary text-xs">✓</span>}
+                    </button>
+                  );
+                })}
               </div>
             </>
           )}
