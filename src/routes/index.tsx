@@ -1141,98 +1141,158 @@ function ChatStream({
 }) {
   const [seg, setSeg] = useState<"all" | "open" | "closed">("all");
   const [selectedChat, setSelectedChat] = useState<CandidateChat | null>(null);
+  const [expandedBoss, setExpandedBoss] = useState<string | null>(null);
 
   const inScopeIds = new Set(bosses.map((b) => b.id));
-  const all = useMemo(
-    () =>
-      ALL_CHATS.filter((c) => inScopeIds.has(c.bossId)).sort((a, b) => b.lastTs - a.lastTs),
+  const allChats = useMemo(
+    () => ALL_CHATS.filter((c) => inScopeIds.has(c.bossId)).sort((a, b) => b.lastTs - a.lastTs),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [bosses],
   );
-  const list = seg === "all" ? all : all.filter((c) => c.status === seg);
+  const filteredChats = seg === "all" ? allChats : allChats.filter((c) => c.status === seg);
 
-  const active = selectedChat && list.find((c) => c.id === selectedChat.id) ? selectedChat : list[0] ?? null;
+  // Group chats by boss, sort bosses by most recent chat in scope
+  const grouped = useMemo(() => {
+    const m = new Map<string, CandidateChat[]>();
+    filteredChats.forEach((c) => {
+      const arr = m.get(c.bossId) ?? [];
+      arr.push(c);
+      m.set(c.bossId, arr);
+    });
+    const entries: { boss: Boss; chats: CandidateChat[]; lastTs: number }[] = [];
+    m.forEach((chats, bossId) => {
+      const boss = bossById(bossId);
+      if (!boss) return;
+      entries.push({ boss, chats, lastTs: chats[0]?.lastTs ?? 0 });
+    });
+    entries.sort((a, b) => b.lastTs - a.lastTs);
+    return entries;
+  }, [filteredChats]);
+
+  const active = selectedChat && filteredChats.find((c) => c.id === selectedChat.id) ? selectedChat : filteredChats[0] ?? null;
   const activeBoss = active ? bossById(active.bossId) : null;
+  const effectiveExpanded = expandedBoss ?? active?.bossId ?? grouped[0]?.boss.id ?? null;
 
   return (
-    <div className="grid grid-cols-12 gap-4 h-[calc(100dvh-360px)] min-h-[560px] border border-border rounded-2xl overflow-hidden bg-surface">
+    <div className="grid grid-cols-12 gap-0 h-[calc(100dvh-340px)] min-h-[600px] border border-border rounded-2xl overflow-hidden bg-card shadow-sm">
       <aside className="col-span-5 border-r border-border overflow-hidden flex flex-col bg-surface">
-        <div className="p-3 border-b border-border flex items-center gap-1">
-          {(["all", "open", "closed"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSeg(s)}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold capitalize ${
-                seg === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {s} · {s === "all" ? all.length : all.filter((c) => c.status === s).length}
-            </button>
-          ))}
+        <div className="p-3 border-b border-border flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            {(["all", "open", "closed"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSeg(s)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize ${
+                  seg === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {s} · {s === "all" ? allChats.length : allChats.filter((c) => c.status === s).length}
+              </button>
+            ))}
+          </div>
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+            {grouped.length} bosses
+          </span>
         </div>
         <ul className="flex-1 overflow-y-auto divide-y divide-border">
-          {list.length === 0 && (
+          {grouped.length === 0 && (
             <li className="p-6 text-sm text-muted-foreground">No chats in scope.</li>
           )}
-          {list.map((c) => {
-            const boss = bossById(c.bossId);
-            const cs = statusMeta[c.chatStatus];
-            const isActive = active?.id === c.id;
+          {grouped.map(({ boss, chats }) => {
+            const expanded = effectiveExpanded === boss.id;
+            const ss = statusMeta[boss.status];
+            const unread = chats.reduce((s, c) => s + (c.unread ?? 0), 0);
             return (
-              <li key={c.id}>
+              <li key={boss.id}>
                 <button
-                  onClick={() => setSelectedChat(c)}
-                  className={`w-full text-left flex items-start gap-3 p-3 hover:bg-surface-elevated transition-colors ${
-                    isActive ? "bg-surface-elevated" : ""
+                  onClick={() => setExpandedBoss(expanded ? null : boss.id)}
+                  className={`w-full flex items-center gap-3 p-3 text-left hover:bg-surface-elevated transition-colors ${
+                    expanded ? "bg-surface-elevated" : ""
                   }`}
                 >
                   <div className="relative shrink-0">
-                    <div className="size-11 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-bold border border-primary/20">
-                      {initials(c.candidateName)}
+                    <div className="size-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
+                      {initials(boss.name)}
                     </div>
-                    <span className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-surface ${cs.dot}`} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-surface ${ss.dot}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-sm truncate">{c.candidateName}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono shrink-0">{c.lastTime}</span>
+                      <span className="font-semibold text-sm truncate">{boss.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono shrink-0">{chats[0]?.lastTime}</span>
                     </div>
                     <div className="text-[11px] text-muted-foreground truncate">
-                      {c.forRole} · {boss?.company}
-                    </div>
-                    <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
-                      {c.unread ? (
-                        <span className="text-[10px] font-bold bg-primary text-primary-foreground rounded-full size-4 flex items-center justify-center shrink-0">
-                          {c.unread}
-                        </span>
-                      ) : null}
+                      {boss.company} · {boss.role}
                     </div>
                     <div className="flex items-center gap-1 mt-1">
-                      {c.status === "closed" && c.closeReason ? (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded border ${
-                          POSITIVE_CLOSE.includes(c.closeReason)
-                            ? "bg-flow/10 text-flow border-flow/20"
-                            : "bg-warn/10 text-warn border-warn/20"
-                        }`}>
-                          {c.closeReason}
-                        </span>
-                      ) : (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded border bg-surface ${cs.text} border-border`}>
-                          {cs.label}
-                        </span>
-                      )}
-                      {boss && (
-                        <span
-                          title={`Owner: ${boss.ownerInitials}`}
-                          className="text-[9px] px-1 py-0.5 rounded bg-surface border border-border text-muted-foreground"
-                        >
-                          {boss.ownerInitials}
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                        {chats.length} chats
+                      </span>
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-surface ${ss.text} border-border`}>
+                        {ss.label}
+                      </span>
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-surface border border-border text-muted-foreground">
+                        {boss.ownerInitials}
+                      </span>
+                      {unread > 0 && (
+                        <span className="ml-auto text-[10px] font-bold bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">
+                          {unread} new
                         </span>
                       )}
                     </div>
                   </div>
+                  <svg className={`size-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
+
+                {expanded && (
+                  <ul className="bg-background/50 border-t border-border">
+                    {chats.map((c) => {
+                      const cs = statusMeta[c.chatStatus];
+                      const isActive = active?.id === c.id;
+                      return (
+                        <li key={c.id}>
+                          <button
+                            onClick={() => setSelectedChat(c)}
+                            className={`w-full text-left flex items-start gap-3 pl-6 pr-3 py-2.5 hover:bg-surface-elevated/60 transition-colors border-l-2 ${
+                              isActive ? "border-primary bg-surface-elevated/60" : "border-transparent"
+                            }`}
+                          >
+                            <div className="relative shrink-0">
+                              <div className="size-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-bold border border-primary/20">
+                                {initials(c.candidateName)}
+                              </div>
+                              <span className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background ${cs.dot}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-[12px] truncate">{c.candidateName}</span>
+                                <span className="text-[10px] text-muted-foreground font-mono shrink-0">{c.lastTime}</span>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground truncate">{c.forRole}</div>
+                              <p className="text-[11px] text-muted-foreground truncate mt-0.5">{c.lastMessage}</p>
+                              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                {c.status === "closed" && c.closeReason ? (
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded border ${
+                                    POSITIVE_CLOSE.includes(c.closeReason)
+                                      ? "bg-flow/10 text-flow border-flow/20"
+                                      : "bg-warn/10 text-warn border-warn/20"
+                                  }`}>{c.closeReason}</span>
+                                ) : (
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded border bg-surface ${cs.text} border-border`}>{cs.label}</span>
+                                )}
+                                {c.interviewChannel && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface border border-border text-muted-foreground">
+                                    {c.interviewChannel === "app" ? "📱 App" : "🔗 External"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </li>
             );
           })}
