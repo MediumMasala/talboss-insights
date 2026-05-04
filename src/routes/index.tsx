@@ -355,7 +355,13 @@ function KPI({ label, value, sub, tone }: { label: string; value: number | strin
   );
 }
 
-function MetricTile({
+function TrackerLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
+      {children}
+    </div>
+  );
+}
   label,
   value,
   sub,
