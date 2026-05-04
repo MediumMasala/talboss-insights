@@ -711,7 +711,24 @@ function FilterBar(props: {
         </div>
       )}
 
-      <span className="ml-auto text-xs text-muted-foreground font-mono">{count} bosses</span>
+      <div className="ml-auto flex items-center gap-2">
+        <span className="text-xs text-muted-foreground font-mono">{count} bosses</span>
+        <button
+          onClick={onOpenTracker}
+          title="Open real-time tracker"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-surface hover:border-primary/40 hover:bg-surface-elevated transition-colors text-[11px] font-semibold"
+        >
+          <span className="relative flex items-center justify-center size-3">
+            <span className="absolute inset-0 rounded-full bg-flow/40 animate-ping" />
+            <span className="size-1.5 rounded-full bg-flow" />
+          </span>
+          <svg className="size-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M3 3v18h18" />
+            <path d="m7 14 4-4 4 4 5-5" />
+          </svg>
+          Tracker
+        </button>
+      </div>
 
       {open && (
         <>
