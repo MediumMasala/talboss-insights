@@ -1198,9 +1198,7 @@ function ProfRow({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
     </div>
   );
 }
-    </div>
-  );
-}
+
 
 /* ---------- Drawer ---------- */
 type DrawerTab = "overview" | "roles" | "chats";
