@@ -496,6 +496,8 @@ function Header({
     location: "Search location…",
     owner: "Search owner / team…",
   };
+
+  return (
     <header className="sticky top-0 z-40 h-16 border-b border-border bg-background/85 backdrop-blur-md px-6 flex items-center justify-between">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3">
