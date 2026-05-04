@@ -1027,8 +1027,8 @@ function EmptyHint({ text }: { text: string }) {
 }
 
 /* ---------- Boss Grid + Card ---------- */
-function BossGrid({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) => void }) {
-  if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
+function BossGrid({ bosses, onOpen, emptyText }: { bosses: Boss[]; onOpen: (b: Boss) => void; emptyText?: string }) {
+  if (bosses.length === 0) return <EmptyHint text={emptyText ?? "No bosses match the current filters."} />;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {bosses.map((b) => (
