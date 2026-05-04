@@ -43,6 +43,21 @@ export interface OpenRole {
   postedAgo: string;
 }
 
+export interface ChatMessage {
+  from: "boss" | "candidate" | "ops" | "system";
+  time: string;
+  text: string;
+}
+
+export interface CandidateProfile {
+  experience: string;
+  location: string;
+  currentCompany: string;
+  expectedComp: string;
+  email: string;
+  phone: string;
+}
+
 export interface CandidateChat {
   id: string;
   bossId: string; // backref so chat-stream can resolve boss
@@ -57,6 +72,8 @@ export interface CandidateChat {
   lastTs: number; // ms epoch — for chat-stream sort
   unread?: number;
   pinned?: boolean;
+  candidateProfile?: CandidateProfile;
+  messages?: ChatMessage[];
 }
 
 export interface Owner {
