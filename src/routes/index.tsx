@@ -60,6 +60,7 @@ function Dashboard() {
   const [verifiedOnly, setVerifiedOnly] = useState(false);
   const [selected, setSelected] = useState<Boss | null>(null);
   const [trackerDrill, setTrackerDrill] = useState<{ title: string; bosses: Boss[] } | null>(null);
+  const [trackerOpen, setTrackerOpen] = useState(false);
 
   const filtered = useMemo(() => {
     return BOSSES.filter((b) => {
