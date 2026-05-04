@@ -480,8 +480,22 @@ function Header({
     location: "Location",
     owner: "Owner",
   };
-
-  return (
+  const scopeHint: Record<SearchScope, string> = {
+    all: "Name, company, ID, location, owner",
+    name: "e.g. Marcus Thorne",
+    company: "e.g. Vento Systems",
+    id: "e.g. GR-99421",
+    location: "e.g. Bengaluru",
+    owner: "e.g. GJ or Gaurika",
+  };
+  const scopePlaceholder: Record<SearchScope, string> = {
+    all: "Search anything…",
+    name: "Search boss name…",
+    company: "Search company…",
+    id: "Search boss ID…",
+    location: "Search location…",
+    owner: "Search owner / team…",
+  };
     <header className="sticky top-0 z-40 h-16 border-b border-border bg-background/85 backdrop-blur-md px-6 flex items-center justify-between">
       <div className="flex items-center gap-6">
         <div className="flex items-center gap-3">
