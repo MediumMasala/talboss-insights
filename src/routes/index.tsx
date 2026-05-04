@@ -305,45 +305,15 @@ function InterviewChannelTabs({
   );
 }
 
-/* ---------- Layout toggle ---------- */
-function LayoutToggle({
-  layout,
-  setLayout,
-}: {
-  layout: "grid" | "chat";
-  setLayout: (l: "grid" | "chat") => void;
-}) {
-  return (
-    <div className="flex p-1 bg-surface rounded-lg border border-border">
-      {(["grid", "chat"] as const).map((l) => (
-        <button
-          key={l}
-          onClick={() => setLayout(l)}
-          className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-            layout === l
-              ? "bg-surface-elevated text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          {l === "grid" ? "Bosses" : "Chats"}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-/* ---------- Tracker Modal (real-time analytics, opened from filter bar icon) ---------- */
-function TrackerModal({
+/* ---------- Tracker Panel (inline analytics) ---------- */
+function TrackerPanel({
   bosses,
-  onClose,
   onDrill,
 }: {
   bosses: Boss[];
-  onClose: () => void;
   onDrill: (d: { title: string; bosses: Boss[] }) => void;
 }) {
   const total = bosses.length || 1;
-
   const byStage = STAGES.map((s) => ({ stage: s, bosses: bosses.filter((b) => b.stage === s) }));
   const maxStageCount = Math.max(1, ...byStage.map((s) => s.bosses.length));
   const happy = bosses.filter((b) => b.sentiment === "happy");
@@ -362,6 +332,10 @@ function TrackerModal({
   negativeClosed.forEach((c) => {
     if (c.closeReason) negByReason[c.closeReason] = (negByReason[c.closeReason] ?? 0) + 1;
   });
+  const posByReason: Record<string, number> = {};
+  positiveClosed.forEach((c) => {
+    if (c.closeReason) posByReason[c.closeReason] = (posByReason[c.closeReason] ?? 0) + 1;
+  });
   const swipes = bosses.reduce((s, b) => s + b.swipedToDM, 0);
   const dms = bosses.reduce((s, b) => s + b.dmAccepted, 0);
   const swipeToDM = swipes ? Math.round((dms / swipes) * 100) : 0;
@@ -371,6 +345,10 @@ function TrackerModal({
   const totalOpenChats = bosses.reduce((s, b) => s + b.chatsOpen, 0);
   const totalClosedChats = bosses.reduce((s, b) => s + b.chatsClosed, 0);
   const avgIntent = Math.round(bosses.reduce((s, b) => s + b.hiringIntent, 0) / (bosses.length || 1));
+  const dmAcceptRate = swipes ? Math.round((dms / swipes) * 100) : 0;
+  const hireRate = totalHired + totalNotHired ? Math.round((totalHired / (totalHired + totalNotHired)) * 100) : 0;
+  const interviewApp = allChats.filter((c) => c.interviewChannel === "app").length;
+  const interviewExt = allChats.filter((c) => c.interviewChannel === "external").length;
 
   const bossesWithPositive = bosses.filter((b) =>
     b.candidateChats.some((c) => c.closeReason && POSITIVE_CLOSE.includes(c.closeReason)),
@@ -380,112 +358,165 @@ function TrackerModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal>
-      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <div className="relative w-full max-w-5xl max-h-[90dvh] bg-surface border border-border rounded-2xl shadow-xl overflow-hidden animate-fade-in flex flex-col">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-flow pulse-dot" />
-            <h3 className="font-bold text-sm">Real-time tracker</h3>
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">{bosses.length} bosses in scope</span>
+    <div className="space-y-5">
+      {/* Headline KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+        <KPI label="Bosses" value={bosses.length} />
+        <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}% of total`} />
+        <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} />
+        <KPI label="Open roles" value={totalRoles} />
+        <KPI label="Open chats" value={totalOpenChats} />
+        <KPI label="Closed chats" value={totalClosedChats} />
+        <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% hire rate`} />
+        <KPI label="Not hired" value={totalNotHired} tone="warn" />
+        <KPI label="Active now" value={active.length} tone="flow" />
+        <KPI label="Idle" value={idle.length} />
+        <KPI label="No reply" value={noReply.length} tone="warn" />
+        <KPI label="Avg intent" value={`${avgIntent}%`} />
+      </div>
+
+      {/* Funnel + sentiment */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <TrackerLabel>Pipeline funnel · by stage</TrackerLabel>
+            <span className="text-[10px] font-mono text-muted-foreground">{total} bosses</span>
           </div>
-          <button onClick={onClose} className="size-8 rounded-md border border-border hover:bg-surface-elevated text-muted-foreground">✕</button>
+          <div className="space-y-1.5">
+            {byStage.map((s) => {
+              const p = Math.round((s.bosses.length / total) * 100);
+              const w = (s.bosses.length / maxStageCount) * 100;
+              return (
+                <button
+                  key={s.stage}
+                  onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
+                  className="w-full flex items-center gap-3 text-left group"
+                  disabled={s.bosses.length === 0}
+                >
+                  <span className="w-24 text-[11px] font-semibold text-foreground/80 shrink-0 truncate">{s.stage}</span>
+                  <div className="flex-1 h-6 bg-surface rounded-md overflow-hidden border border-border relative">
+                    <div className="h-full bg-primary/80 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
+                    <span className="absolute inset-0 flex items-center px-2 text-[11px] font-mono font-bold text-foreground">{s.bosses.length}</span>
+                  </div>
+                  <span className="w-12 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="overflow-y-auto p-5 space-y-5">
-          {/* Top KPI strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            <KPI label="Bosses" value={bosses.length} />
-            <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}%`} />
-            <KPI label="Open roles" value={totalRoles} />
-            <KPI label="Open chats" value={totalOpenChats} />
-            <KPI label="Hired" value={totalHired} tone="flow" />
-            <KPI label="Not hired" value={totalNotHired} tone="warn" />
-            <KPI label="Active now" value={active.length} tone="flow" />
-            <KPI label="Idle" value={idle.length} />
-            <KPI label="No reply" value={noReply.length} tone="warn" />
-            <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} />
-            <KPI label="Closed chats" value={totalClosedChats} />
-            <KPI label="Avg intent" value={`${avgIntent}%`} />
+        <div className="grid grid-cols-2 gap-2">
+          <MetricTile label="Happy" value={`${pct(happy.length, total)}%`} sub={`${happy.length} bosses`} tone="flow" onClick={() => onDrill({ title: "Happy bosses", bosses: happy })} />
+          <MetricTile label="Unhappy" value={`${pct(unhappy.length, total)}%`} sub={`${unhappy.length} bosses`} tone="warn" onClick={() => onDrill({ title: "Unhappy bosses", bosses: unhappy })} />
+          <MetricTile label="Neutral" value={`${pct(neutral.length, total)}%`} sub={`${neutral.length} bosses`} onClick={() => onDrill({ title: "Neutral bosses", bosses: neutral })} />
+          <MetricTile label="Active" value={`${active.length}`} sub={`${pct(active.length, total)}%`} tone="flow" onClick={() => onDrill({ title: "Active bosses", bosses: active })} />
+          <MetricTile label="Idle" value={`${idle.length}`} sub={`${pct(idle.length, total)}%`} onClick={() => onDrill({ title: "Idle bosses", bosses: idle })} />
+          <MetricTile label="No reply" value={`${noReply.length}`} sub={`${pct(noReply.length, total)}%`} tone="warn" onClick={() => onDrill({ title: "No-reply bosses", bosses: noReply })} />
+        </div>
+      </div>
+
+      {/* Conversion + interview channels */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+          <TrackerLabel>Swipe → DM conversion</TrackerLabel>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-mono font-bold text-foreground">{swipeToDM}%</span>
+            <span className="text-[11px] text-muted-foreground font-mono">{dms} / {swipes} swipes</span>
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 bg-background border border-border rounded-xl p-4">
-              <TrackerLabel>Drop-off funnel · by stage</TrackerLabel>
-              <div className="space-y-1.5">
-                {byStage.map((s) => {
-                  const p = Math.round((s.bosses.length / total) * 100);
-                  const w = (s.bosses.length / maxStageCount) * 100;
-                  return (
-                    <button
-                      key={s.stage}
-                      onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
-                      className="w-full flex items-center gap-3 text-left group"
-                      disabled={s.bosses.length === 0}
-                    >
-                      <span className="w-24 text-[11px] font-medium text-muted-foreground shrink-0 truncate">{s.stage}</span>
-                      <div className="flex-1 h-5 bg-surface rounded-md overflow-hidden border border-border relative">
-                        <div className="h-full bg-primary/70 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
-                        <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold">{s.bosses.length}</span>
-                      </div>
-                      <span className="w-10 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <MetricTile label="Happy" value={`${pct(happy.length, total)}%`} sub={`${happy.length} bosses`} tone="flow" onClick={() => onDrill({ title: "Happy bosses", bosses: happy })} />
-              <MetricTile label="Unhappy" value={`${pct(unhappy.length, total)}%`} sub={`${unhappy.length} bosses`} tone="warn" onClick={() => onDrill({ title: "Unhappy bosses", bosses: unhappy })} />
-              <MetricTile label="Neutral" value={`${pct(neutral.length, total)}%`} sub={`${neutral.length} bosses`} onClick={() => onDrill({ title: "Neutral bosses", bosses: neutral })} />
-              <MetricTile label="Active" value={`${active.length}`} sub={`${pct(active.length, total)}%`} tone="flow" onClick={() => onDrill({ title: "Active bosses", bosses: active })} />
-              <MetricTile label="No reply" value={`${noReply.length}`} sub={`${pct(noReply.length, total)}%`} tone="warn" onClick={() => onDrill({ title: "No-reply bosses", bosses: noReply })} />
-              <MetricTile label="Idle" value={`${idle.length}`} sub={`${pct(idle.length, total)}%`} onClick={() => onDrill({ title: "Idle bosses", bosses: idle })} />
-            </div>
+          <div className="mt-2 h-2 bg-surface rounded-full overflow-hidden border border-border">
+            <div className="h-full bg-primary" style={{ width: `${swipeToDM}%` }} />
           </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+            <div><span className="text-muted-foreground">DM accept rate</span><div className="font-mono font-bold text-sm text-foreground">{dmAcceptRate}%</div></div>
+            <div><span className="text-muted-foreground">Avg intent</span><div className="font-mono font-bold text-sm text-foreground">{avgIntent}%</div></div>
+          </div>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-background border border-border rounded-xl p-4">
-              <TrackerLabel>Swipe → DM ratio</TrackerLabel>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-mono font-bold">{swipeToDM}%</span>
-                <span className="text-[11px] text-muted-foreground">{dms}/{swipes}</span>
-              </div>
-              <div className="mt-2 h-1.5 bg-surface rounded-full overflow-hidden border border-border">
-                <div className="h-full bg-primary" style={{ width: `${swipeToDM}%` }} />
-              </div>
-            </div>
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+          <TrackerLabel>Interview channels</TrackerLabel>
+          <ChannelBar label="On TalBoss app" value={interviewApp} total={interviewApp + interviewExt || 1} tone="flow" />
+          <div className="h-2" />
+          <ChannelBar label="External (Meet · Zoom)" value={interviewExt} total={interviewApp + interviewExt || 1} />
+          <div className="text-[10px] text-muted-foreground mt-3">
+            Use the <span className="font-semibold text-foreground">Stage = Interview</span> filter to drill in.
+          </div>
+        </div>
 
-            <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="bg-background border border-border rounded-xl p-4 text-left hover:border-flow/40 transition-colors">
-              <TrackerLabel>Positive closes</TrackerLabel>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-mono font-bold text-flow">{positiveClosed.length}</span>
-                <span className="text-[11px] text-muted-foreground">hired · accepted</span>
+        <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="bg-card border border-border rounded-xl p-4 text-left hover:border-warn/40 shadow-sm transition-colors">
+          <TrackerLabel>Negative closes · reasons</TrackerLabel>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-mono font-bold text-warn">{negativeClosed.length}</span>
+            <span className="text-[11px] text-muted-foreground">across {bossesWithNegative.length} bosses</span>
+          </div>
+          <div className="mt-3 space-y-1">
+            {Object.entries(negByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+              <div key={r} className="flex items-center gap-2 text-[11px]">
+                <span className="flex-1 truncate">{r}</span>
+                <span className="font-mono font-bold text-warn">{n}</span>
               </div>
-              <div className="text-[10px] text-muted-foreground mt-2">Across {bossesWithPositive.length} bosses</div>
-            </button>
+            ))}
+            {negativeClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
+          </div>
+        </button>
+      </div>
 
-            <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="bg-background border border-border rounded-xl p-4 text-left hover:border-warn/40 transition-colors">
-              <TrackerLabel>Negative closes · reasons</TrackerLabel>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-mono font-bold text-warn">{negativeClosed.length}</span>
-                <span className="text-[11px] text-muted-foreground">unmatched</span>
+      {/* Positive closes detail */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="bg-card border border-border rounded-xl p-4 text-left hover:border-flow/40 shadow-sm transition-colors">
+          <TrackerLabel>Positive closes · reasons</TrackerLabel>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-mono font-bold text-flow">{positiveClosed.length}</span>
+            <span className="text-[11px] text-muted-foreground">across {bossesWithPositive.length} bosses</span>
+          </div>
+          <div className="mt-3 space-y-1">
+            {Object.entries(posByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+              <div key={r} className="flex items-center gap-2 text-[11px]">
+                <span className="flex-1 truncate">{r}</span>
+                <span className="font-mono font-bold text-flow">{n}</span>
               </div>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {Object.entries(negByReason).map(([r, n]) => (
-                  <span key={r} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-warn/10 text-warn border border-warn/20">
-                    {r} {n}
-                  </span>
-                ))}
-              </div>
-            </button>
+            ))}
+            {positiveClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
+          </div>
+        </button>
+
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+          <TrackerLabel>Owner load</TrackerLabel>
+          <div className="space-y-1.5">
+            {OWNERS.map((o) => {
+              const owned = bosses.filter((b) => b.ownerInitials === o.initials);
+              const w = (owned.length / Math.max(1, bosses.length)) * 100;
+              return (
+                <button key={o.initials} onClick={() => onDrill({ title: `Owner · ${o.name}`, bosses: owned })} className="w-full text-left flex items-center gap-3">
+                  <span className="w-24 text-[11px] font-semibold truncate">{o.name.split(" ")[0]}</span>
+                  <div className="flex-1 h-5 bg-surface rounded-md overflow-hidden border border-border relative">
+                    <div className="h-full bg-primary/70" style={{ width: `${w}%` }} />
+                    <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold">{owned.length}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+function ChannelBar({ label, value, total, tone }: { label: string; value: number; total: number; tone?: "flow" }) {
+  const w = Math.round((value / total) * 100);
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px] mb-1">
+        <span className="text-foreground/80 font-semibold">{label}</span>
+        <span className="font-mono text-muted-foreground">{value} · {w}%</span>
+      </div>
+      <div className="h-2 bg-surface rounded-full overflow-hidden border border-border">
+        <div className={`h-full ${tone === "flow" ? "bg-flow" : "bg-primary"}`} style={{ width: `${w}%` }} />
+      </div>
+    </div>
+  );
+}
+
 
 function KPI({ label, value, sub, tone }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn" }) {
   const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
