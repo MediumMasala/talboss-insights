@@ -114,11 +114,10 @@ function Dashboard() {
         verifiedOnly={verifiedOnly}
         setVerifiedOnly={setVerifiedOnly}
         count={filtered.length}
+        onOpenTracker={() => setTrackerOpen(true)}
       />
 
       <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-6">
-        <Tracker bosses={filtered} onDrill={setTrackerDrill} />
-
         <div className="flex items-center justify-between">
           <SectionHeader
             title={view === "all" ? (layout === "chat" ? "All chats" : "All bosses") : `My ${layout === "chat" ? "chats" : "bosses"} · ${me}`}
@@ -133,6 +132,17 @@ function Dashboard() {
           <ChatStream bosses={filtered} onOpenBoss={setSelected} />
         )}
       </main>
+
+      {trackerOpen && (
+        <TrackerModal
+          bosses={filtered}
+          onClose={() => setTrackerOpen(false)}
+          onDrill={(d) => {
+            setTrackerOpen(false);
+            setTrackerDrill(d);
+          }}
+        />
+      )}
 
       {selected && (
         <BossDrawer boss={selected} onClose={() => setSelected(null)} />
