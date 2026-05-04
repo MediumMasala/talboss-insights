@@ -43,6 +43,21 @@ export interface OpenRole {
   postedAgo: string;
 }
 
+export interface ChatMessage {
+  from: "boss" | "candidate" | "ops" | "system";
+  time: string;
+  text: string;
+}
+
+export interface CandidateProfile {
+  experience: string;
+  location: string;
+  currentCompany: string;
+  expectedComp: string;
+  email: string;
+  phone: string;
+}
+
 export interface CandidateChat {
   id: string;
   bossId: string; // backref so chat-stream can resolve boss
@@ -57,6 +72,8 @@ export interface CandidateChat {
   lastTs: number; // ms epoch — for chat-stream sort
   unread?: number;
   pinned?: boolean;
+  candidateProfile?: CandidateProfile;
+  messages?: ChatMessage[];
 }
 
 export interface Owner {
@@ -443,6 +460,66 @@ BOSSES[5].candidateChats = mkChat("GR-33991", [
 BOSSES[7].candidateChats = mkChat("GR-44102", [
   { candidateName: "Nidhi A", candidateRole: "Recruiter", forRole: "Talent Partner", status: "open", chatStatus: "idle", lastMessage: "Intro sent.", lastTime: "1d", lastTs: day(1) },
 ]);
+
+// Synthesize candidate profile + full message thread for every chat
+const LOCS = ["Bengaluru", "Mumbai", "Delhi", "Pune", "Remote", "Hyderabad", "Berlin", "London", "Tokyo"];
+const COS = ["Razorpay", "Swiggy", "Stripe", "Notion", "Atlassian", "Flipkart", "Zomato", "CRED", "PhonePe"];
+
+function hashStr(s: string) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return Math.abs(h);
+}
+
+function buildProfile(c: CandidateChat): CandidateProfile {
+  const h = hashStr(c.candidateName);
+  return {
+    experience: `${3 + (h % 8)} yrs`,
+    location: LOCS[h % LOCS.length],
+    currentCompany: COS[h % COS.length],
+    expectedComp: `₹${20 + (h % 50)}-${30 + (h % 60)} LPA`,
+    email: `${c.candidateName.toLowerCase().replace(/\s+/g, ".")}@mail.com`,
+    phone: `+91 9${String(h).slice(0, 4)} ${String(h).slice(4, 9).padEnd(5, "0")}`,
+  };
+}
+
+function buildThread(c: CandidateChat, boss: Boss): ChatMessage[] {
+  const t = c.lastTime;
+  const base: ChatMessage[] = [
+    { from: "system", time: "Day 1 · 09:02", text: `Match initiated · ${c.candidateName} → ${c.forRole} @ ${boss.company}` },
+    { from: "ops", time: "Day 1 · 09:05", text: `Hi ${c.candidateName.split(" ")[0]}, sharing the role at ${boss.company}. Compensation in band, hybrid setup. Interested?` },
+    { from: "candidate", time: "Day 1 · 10:11", text: `Yes, looks aligned. Can you share the full JD and team details?` },
+    { from: "ops", time: "Day 1 · 10:18", text: `Sent on email. Looping in ${boss.name.split(" ")[0]} for intro.` },
+    { from: "boss", time: "Day 1 · 14:02", text: `Hi ${c.candidateName.split(" ")[0]} — saw your profile, looks strong. Quick chat tomorrow?` },
+    { from: "candidate", time: "Day 1 · 18:30", text: `Sure, 4pm IST works.` },
+    { from: "boss", time: "Day 2 · 16:45", text: `Good chat. Sending you a small take-home.` },
+    { from: "candidate", time: "Day 3 · 11:00", text: `Submitted. Let me know feedback.` },
+  ];
+  if (c.status === "closed" && c.closeReason) {
+    if (POSITIVE_CLOSE.includes(c.closeReason)) {
+      base.push(
+        { from: "boss", time: `${t} ago`, text: `Loved the submission. Sending an offer.` },
+        { from: "candidate", time: `${t} ago`, text: c.lastMessage },
+        { from: "system", time: `${t} ago`, text: `Chat closed · ${c.closeReason}` },
+      );
+    } else {
+      base.push(
+        { from: "ops", time: `${t} ago`, text: `Following up on the take-home.` },
+        { from: "system", time: `${t} ago`, text: `Chat closed · ${c.closeReason}` },
+      );
+    }
+  } else {
+    base.push({ from: c.chatStatus === "no_reply" ? "ops" : "candidate", time: `${t} ago`, text: c.lastMessage });
+  }
+  return base;
+}
+
+BOSSES.forEach((boss) => {
+  boss.candidateChats.forEach((c) => {
+    if (!c.candidateProfile) c.candidateProfile = buildProfile(c);
+    if (!c.messages) c.messages = buildThread(c, boss);
+  });
+});
 
 export const ROLES = Array.from(new Set(BOSSES.map((b) => b.role)));
 export const LOCATIONS = Array.from(new Set(BOSSES.map((b) => b.location)));
