@@ -847,7 +847,6 @@ function FilterBar(props: {
   verifiedOnly: boolean;
   setVerifiedOnly: (v: boolean) => void;
   count: number;
-  onOpenTracker: () => void;
 }) {
   const {
     stageFilter, setStageFilter,
@@ -856,7 +855,6 @@ function FilterBar(props: {
     teamFilter, setTeamFilter,
     verifiedOnly, setVerifiedOnly,
     count,
-    onOpenTracker,
   } = props;
   const [open, setOpen] = useState(false);
 
