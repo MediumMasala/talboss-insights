@@ -631,6 +631,7 @@ function Header({
   scope,
   setScope,
   alerts,
+  onAlertsClick,
 }: {
   view: View;
   setView: (v: View) => void;
@@ -641,6 +642,7 @@ function Header({
   scope: SearchScope;
   setScope: (s: SearchScope) => void;
   alerts: number;
+  onAlertsClick?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
