@@ -1093,44 +1093,111 @@ function ChatDetail({
       </div>
 
       <div className="p-5 space-y-5">
-        {/* Boss strip — click to open profile */}
-        <button
-          onClick={() => onOpenBoss(boss)}
-          className="w-full flex items-center gap-3 p-3 rounded-xl bg-surface border border-border hover:border-primary/40 transition-colors text-left"
-        >
-          <div className="size-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
-            {initials(boss.name)}
+        {/* Two profile strips: candidate + boss */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+          <div className="p-3 rounded-xl bg-surface border border-border">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold border border-primary/20">
+                {initials(chat.candidateName)}
+              </div>
+              <div className="min-w-0">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Candidate</div>
+                <div className="font-semibold text-sm truncate">{chat.candidateName}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{chat.candidateRole}</div>
+              </div>
+            </div>
+            {chat.candidateProfile && (
+              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+                <ProfRow k="Exp" v={chat.candidateProfile.experience} />
+                <ProfRow k="Loc" v={chat.candidateProfile.location} />
+                <ProfRow k="Now" v={chat.candidateProfile.currentCompany} />
+                <ProfRow k="Expects" v={chat.candidateProfile.expectedComp} />
+              </div>
+            )}
           </div>
-          <div className="flex-1 min-w-0">
-            <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Boss</div>
-            <div className="font-semibold text-sm truncate">{boss.name}</div>
-            <div className="text-[11px] text-muted-foreground truncate">{boss.company} · {boss.role}</div>
-          </div>
-          <span className="text-[10px] font-mono text-muted-foreground">{boss.id}</span>
-          <span className="text-[10px] text-muted-foreground">→</span>
-        </button>
 
-        <div>
-          <Label>Recent messages</Label>
-          <p className="text-sm leading-relaxed p-3 rounded-lg bg-surface border-l-2 border-primary">
-            {chat.lastMessage}
-          </p>
-          <p className="text-[10px] text-muted-foreground font-mono mt-1">{chat.lastTime} ago</p>
+          <button
+            onClick={() => onOpenBoss(boss)}
+            className="text-left p-3 rounded-xl bg-surface border border-border hover:border-primary/40 transition-colors"
+          >
+            <div className="flex items-center gap-3 mb-3">
+              <div className="size-10 rounded-full bg-primary text-primary-foreground flex items-center justify-center text-xs font-bold">
+                {initials(boss.name)}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Boss · click to open</div>
+                <div className="font-semibold text-sm truncate">{boss.name}</div>
+                <div className="text-[11px] text-muted-foreground truncate">{boss.company} · {boss.role}</div>
+              </div>
+              <span className="text-[10px] text-muted-foreground">→</span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5 text-[11px]">
+              <ProfRow k="Loc" v={boss.location} />
+              <ProfRow k="Stage" v={boss.stage} />
+              <ProfRow k="ID" v={boss.id} mono />
+              <ProfRow k="Owner" v={boss.ownerInitials} />
+            </div>
+          </button>
         </div>
 
         {chat.status === "closed" && chat.closeReason && (
-          <div>
-            <Label>Close outcome</Label>
-            <span className={`inline-block text-xs font-semibold px-3 py-1.5 rounded-lg border ${
-              POSITIVE_CLOSE.includes(chat.closeReason)
-                ? "bg-flow/10 text-flow border-flow/30"
-                : "bg-warn/10 text-warn border-warn/30"
-            }`}>
-              {chat.closeReason}
-            </span>
+          <div className={`p-3 rounded-lg border flex items-center gap-2 ${
+            POSITIVE_CLOSE.includes(chat.closeReason)
+              ? "bg-flow/5 border-flow/30 text-flow"
+              : "bg-warn/5 border-warn/30 text-warn"
+          }`}>
+            <span className="text-[10px] uppercase tracking-widest font-bold">Closed</span>
+            <span className="text-xs font-semibold">{chat.closeReason}</span>
           </div>
         )}
+
+        {/* Full conversation thread */}
+        <div>
+          <Label>Full conversation · {chat.messages?.length ?? 0} messages</Label>
+          <div className="space-y-3">
+            {chat.messages?.map((m, i) => {
+              const align =
+                m.from === "system" ? "items-center"
+                  : m.from === "ops" ? "items-end"
+                  : m.from === "boss" ? "items-end"
+                  : "items-start";
+              const bubble =
+                m.from === "system"
+                  ? "bg-transparent border border-dashed border-border text-muted-foreground text-xs px-3 py-1.5 rounded-md"
+                  : m.from === "ops"
+                  ? "bg-primary text-primary-foreground rounded-tr-none px-3 py-2 rounded-lg text-sm"
+                  : m.from === "boss"
+                  ? "bg-flow/15 text-foreground border border-flow/30 rounded-tr-none px-3 py-2 rounded-lg text-sm"
+                  : "bg-surface-elevated border border-border rounded-tl-none px-3 py-2 rounded-lg text-sm";
+              const who =
+                m.from === "ops" ? "Ops"
+                  : m.from === "boss" ? boss.name
+                  : m.from === "candidate" ? chat.candidateName
+                  : "System";
+              return (
+                <div key={i} className={`flex flex-col gap-1 ${align}`}>
+                  <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
+                    {who} · {m.time}
+                  </span>
+                  <div className={`max-w-[85%] ${bubble}`}>{m.text}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </div>
+    </div>
+  );
+}
+
+function ProfRow({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
+  return (
+    <div className="flex items-center gap-1.5 min-w-0">
+      <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold shrink-0 w-12">{k}</span>
+      <span className={`text-[11px] truncate ${mono ? "font-mono" : ""}`}>{v}</span>
+    </div>
+  );
+}
     </div>
   );
 }
