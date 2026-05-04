@@ -47,20 +47,22 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
   unhappy: { label: "Unhappy", cls: "text-warn" },
 };
 
+type Section = "alerts" | "overview" | "tracker" | "chats";
+
 function Dashboard() {
+  const [section, setSection] = useState<Section>("overview");
   const [view, setView] = useState<View>("all");
-  const [layout, setLayout] = useState<"grid" | "chat">("grid");
   const [me, setMe] = useState<string>("YS");
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<SearchScope>("all");
   const [stageFilter, setStageFilter] = useState<Stage | "all">("all");
   const [statusFilter, setStatusFilter] = useState<ChatStatus | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<Sentiment | "all">("all");
-  const [teamFilter, setTeamFilter] = useState<string>("all"); // owner initials
+  const [teamFilter, setTeamFilter] = useState<string>("all");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [interviewChannel, setInterviewChannel] = useState<"all" | "app" | "external">("all");
   const [selected, setSelected] = useState<Boss | null>(null);
   const [trackerDrill, setTrackerDrill] = useState<{ title: string; bosses: Boss[] } | null>(null);
-  const [trackerOpen, setTrackerOpen] = useState(false);
 
   const filtered = useMemo(() => {
     return BOSSES.filter((b) => {
@@ -86,67 +88,93 @@ function Dashboard() {
     });
   }, [view, me, search, scope, stageFilter, statusFilter, sentimentFilter, teamFilter, verifiedOnly]);
 
-  const alerts = filtered.filter((b) => b.alert).length;
+  const alertBosses = filtered.filter((b) => b.alert);
+  const alerts = alertBosses.length;
+
+  const interviewFiltered = useMemo(() => {
+    if (stageFilter !== "Interview" || interviewChannel === "all") return filtered;
+    return filtered.filter((b) =>
+      b.candidateChats.some((c) => c.interviewChannel === interviewChannel),
+    );
+  }, [filtered, stageFilter, interviewChannel]);
+
+  const sectionTitle: Record<Section, string> = {
+    alerts: "Alerts · critical cases",
+    overview: view === "all" ? "All bosses" : `My bosses · ${me}`,
+    tracker: "Trackers · live analytics",
+    chats: "Chats · grouped by boss",
+  };
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <Header
-        view={view}
-        setView={setView}
-        me={me}
-        setMe={setMe}
-        search={search}
-        setSearch={setSearch}
-        scope={scope}
-        setScope={setScope}
+    <div className="min-h-dvh bg-background text-foreground flex">
+      <SideNav
+        section={section}
+        setSection={setSection}
         alerts={alerts}
+        bossCount={filtered.length}
+        chatCount={filtered.flatMap((b) => b.candidateChats).length}
       />
 
-      <FilterBar
-        stageFilter={stageFilter}
-        setStageFilter={setStageFilter}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
-        sentimentFilter={sentimentFilter}
-        setSentimentFilter={setSentimentFilter}
-        teamFilter={teamFilter}
-        setTeamFilter={setTeamFilter}
-        verifiedOnly={verifiedOnly}
-        setVerifiedOnly={setVerifiedOnly}
-        count={filtered.length}
-        onOpenTracker={() => setTrackerOpen(true)}
-      />
-
-      <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <SectionHeader
-            title={view === "all" ? (layout === "chat" ? "All chats" : "All bosses") : `My ${layout === "chat" ? "chats" : "bosses"} · ${me}`}
-            subtitle={layout === "chat" ? `${filtered.flatMap((b) => b.candidateChats).length} chats` : `${filtered.length} matches`}
-          />
-          <LayoutToggle layout={layout} setLayout={setLayout} />
-        </div>
-
-        {layout === "grid" ? (
-          <BossGrid bosses={filtered} onOpen={setSelected} />
-        ) : (
-          <ChatStream bosses={filtered} onOpenBoss={setSelected} />
-        )}
-      </main>
-
-      {trackerOpen && (
-        <TrackerModal
-          bosses={filtered}
-          onClose={() => setTrackerOpen(false)}
-          onDrill={(d) => {
-            setTrackerOpen(false);
-            setTrackerDrill(d);
-          }}
+      <div className="flex-1 min-w-0">
+        <Header
+          view={view}
+          setView={setView}
+          me={me}
+          setMe={setMe}
+          search={search}
+          setSearch={setSearch}
+          scope={scope}
+          setScope={setScope}
+          alerts={alerts}
+          onAlertsClick={() => setSection("alerts")}
         />
-      )}
 
-      {selected && (
-        <BossDrawer boss={selected} onClose={() => setSelected(null)} />
-      )}
+        <FilterBar
+          stageFilter={stageFilter}
+          setStageFilter={setStageFilter}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          sentimentFilter={sentimentFilter}
+          setSentimentFilter={setSentimentFilter}
+          teamFilter={teamFilter}
+          setTeamFilter={setTeamFilter}
+          verifiedOnly={verifiedOnly}
+          setVerifiedOnly={setVerifiedOnly}
+          count={interviewFiltered.length}
+        />
+
+        <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
+          <SectionHeader
+            title={sectionTitle[section]}
+            subtitle={
+              section === "chats"
+                ? `${interviewFiltered.flatMap((b) => b.candidateChats).length} chats across ${interviewFiltered.length} bosses`
+                : section === "alerts"
+                ? `${alertBosses.length} bosses need attention`
+                : `${interviewFiltered.length} bosses in scope`
+            }
+          />
+
+          {stageFilter === "Interview" && (section === "overview" || section === "chats") && (
+            <InterviewChannelTabs value={interviewChannel} onChange={setInterviewChannel} bosses={filtered} />
+          )}
+
+          {section === "alerts" && (
+            <BossGrid bosses={alertBosses} onOpen={setSelected} emptyText="No active alerts. All boss conversations are healthy." />
+          )}
+          {section === "overview" && (
+            <BossGrid bosses={interviewFiltered} onOpen={setSelected} />
+          )}
+          {section === "tracker" && (
+            <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} />
+          )}
+          {section === "chats" && (
+            <ChatStream bosses={interviewFiltered} onOpenBoss={setSelected} />
+          )}
+        </main>
+      </div>
+
+      {selected && <BossDrawer boss={selected} onClose={() => setSelected(null)} />}
       {trackerDrill && (
         <DrillModal
           title={trackerDrill.title}
@@ -158,6 +186,121 @@ function Dashboard() {
           }}
         />
       )}
+    </div>
+  );
+}
+
+/* ---------- Sidebar nav ---------- */
+function SideNav({
+  section,
+  setSection,
+  alerts,
+  bossCount,
+  chatCount,
+}: {
+  section: Section;
+  setSection: (s: Section) => void;
+  alerts: number;
+  bossCount: number;
+  chatCount: number;
+}) {
+  const items: { key: Section; label: string; badge?: number; tone?: "warn"; icon: React.ReactNode }[] = [
+    {
+      key: "alerts",
+      label: "Alerts",
+      badge: alerts,
+      tone: "warn",
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>),
+    },
+    {
+      key: "overview",
+      label: "Overview",
+      badge: bossCount,
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>),
+    },
+    {
+      key: "tracker",
+      label: "Trackers",
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg>),
+    },
+    {
+      key: "chats",
+      label: "Chats",
+      badge: chatCount,
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>),
+    },
+  ];
+
+  return (
+    <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-border bg-surface sticky top-0 h-dvh">
+      <div className="px-4 h-16 flex items-center gap-2 border-b border-border">
+        <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold">T</div>
+        <div>
+          <div className="font-bold text-sm leading-none">TalBoss</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">Ops Admin</div>
+        </div>
+      </div>
+      <nav className="p-2 space-y-0.5">
+        {items.map((it) => {
+          const active = section === it.key;
+          const isAlertWarn = it.tone === "warn" && (it.badge ?? 0) > 0;
+          return (
+            <button
+              key={it.key}
+              onClick={() => setSection(it.key)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                active ? "bg-primary/10 text-primary" : "text-foreground/80 hover:bg-surface-elevated hover:text-foreground"
+              }`}
+            >
+              <span className={isAlertWarn && !active ? "text-warn" : ""}>{it.icon}</span>
+              <span className="flex-1 text-left">{it.label}</span>
+              {typeof it.badge === "number" && it.badge > 0 && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  isAlertWarn ? "bg-warn/15 text-warn" : active ? "bg-primary text-primary-foreground" : "bg-surface-elevated text-muted-foreground border border-border"
+                }`}>{it.badge}</span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="mt-auto p-3 text-[10px] text-muted-foreground border-t border-border">
+        Grapevine internal · v0.4
+      </div>
+    </aside>
+  );
+}
+
+/* ---------- Interview channel tabs ---------- */
+function InterviewChannelTabs({
+  value,
+  onChange,
+  bosses,
+}: {
+  value: "all" | "app" | "external";
+  onChange: (v: "all" | "app" | "external") => void;
+  bosses: Boss[];
+}) {
+  const all = bosses.flatMap((b) => b.candidateChats);
+  const app = all.filter((c) => c.interviewChannel === "app").length;
+  const ext = all.filter((c) => c.interviewChannel === "external").length;
+  const opts: { k: "all" | "app" | "external"; label: string; count: number }[] = [
+    { k: "all", label: "All interviews", count: app + ext },
+    { k: "app", label: "On TalBoss app", count: app },
+    { k: "external", label: "External (Meet · Zoom)", count: ext },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 p-1 bg-surface border border-border rounded-lg w-fit">
+      {opts.map((o) => (
+        <button
+          key={o.k}
+          onClick={() => onChange(o.k)}
+          className={`px-3 py-1 rounded-md text-xs font-semibold ${
+            value === o.k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          {o.label} <span className="font-mono opacity-70">· {o.count}</span>
+        </button>
+      ))}
     </div>
   );
 }
