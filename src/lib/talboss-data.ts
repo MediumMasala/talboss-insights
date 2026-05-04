@@ -519,6 +519,9 @@ BOSSES.forEach((boss) => {
   boss.candidateChats.forEach((c) => {
     if (!c.candidateProfile) c.candidateProfile = buildProfile(c);
     if (!c.messages) c.messages = buildThread(c, boss);
+    if (!c.interviewChannel) {
+      c.interviewChannel = hashStr(c.candidateName) % 2 === 0 ? "app" : "external";
+    }
   });
 });
 
