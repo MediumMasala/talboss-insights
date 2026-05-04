@@ -189,56 +189,46 @@ function LayoutToggle({
   );
 }
 
-/* ---------- Tracker (real-time analytics) ---------- */
-function Tracker({
+/* ---------- Tracker Modal (real-time analytics, opened from filter bar icon) ---------- */
+function TrackerModal({
   bosses,
+  onClose,
   onDrill,
 }: {
   bosses: Boss[];
+  onClose: () => void;
   onDrill: (d: { title: string; bosses: Boss[] }) => void;
 }) {
   const total = bosses.length || 1;
 
-  // Funnel by stage
-  const byStage = STAGES.map((s) => ({
-    stage: s,
-    bosses: bosses.filter((b) => b.stage === s),
-  }));
+  const byStage = STAGES.map((s) => ({ stage: s, bosses: bosses.filter((b) => b.stage === s) }));
   const maxStageCount = Math.max(1, ...byStage.map((s) => s.bosses.length));
-
-  // Sentiment
   const happy = bosses.filter((b) => b.sentiment === "happy");
   const neutral = bosses.filter((b) => b.sentiment === "neutral");
   const unhappy = bosses.filter((b) => b.sentiment === "unhappy");
-
-  // Status
   const active = bosses.filter((b) => b.status === "active");
   const idle = bosses.filter((b) => b.status === "idle");
   const noReply = bosses.filter((b) => b.status === "no_reply");
-
-  // Onboarded = past Onboarding stage (i.e., verified + has roles)
   const onboarded = bosses.filter((b) => b.stage !== "Onboarding");
-
-  // Closed chats positive vs negative across all bosses
+  const verified = bosses.filter((b) => b.verified);
   const allChats = bosses.flatMap((b) => b.candidateChats);
   const closedChats = allChats.filter((c) => c.status === "closed");
-  const positiveClosed = closedChats.filter(
-    (c) => c.closeReason && POSITIVE_CLOSE.includes(c.closeReason),
-  );
-  const negativeClosed = closedChats.filter(
-    (c) => c.closeReason && NEGATIVE_CLOSE.includes(c.closeReason),
-  );
+  const positiveClosed = closedChats.filter((c) => c.closeReason && POSITIVE_CLOSE.includes(c.closeReason));
+  const negativeClosed = closedChats.filter((c) => c.closeReason && NEGATIVE_CLOSE.includes(c.closeReason));
   const negByReason: Record<string, number> = {};
   negativeClosed.forEach((c) => {
     if (c.closeReason) negByReason[c.closeReason] = (negByReason[c.closeReason] ?? 0) + 1;
   });
-
-  // Swipe → DM
   const swipes = bosses.reduce((s, b) => s + b.swipedToDM, 0);
   const dms = bosses.reduce((s, b) => s + b.dmAccepted, 0);
   const swipeToDM = swipes ? Math.round((dms / swipes) * 100) : 0;
+  const totalRoles = bosses.reduce((s, b) => s + b.rolesOpen, 0);
+  const totalHired = bosses.reduce((s, b) => s + b.hired, 0);
+  const totalNotHired = bosses.reduce((s, b) => s + b.notHired, 0);
+  const totalOpenChats = bosses.reduce((s, b) => s + b.chatsOpen, 0);
+  const totalClosedChats = bosses.reduce((s, b) => s + b.chatsClosed, 0);
+  const avgIntent = Math.round(bosses.reduce((s, b) => s + b.hiringIntent, 0) / (bosses.length || 1));
 
-  // Bosses with chats closed positively / negatively (for drill-down)
   const bossesWithPositive = bosses.filter((b) =>
     b.candidateChats.some((c) => c.closeReason && POSITIVE_CLOSE.includes(c.closeReason)),
   );
@@ -247,155 +237,120 @@ function Tracker({
   );
 
   return (
-    <section className="bg-surface border border-border rounded-2xl p-5">
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <span className="size-1.5 rounded-full bg-flow pulse-dot" />
-          <h2 className="text-sm font-bold tracking-tight">Tracker</h2>
-          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">
-            real-time
-          </span>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal>
+      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
+      <div className="relative w-full max-w-5xl max-h-[90dvh] bg-surface border border-border rounded-2xl shadow-xl overflow-hidden animate-fade-in flex flex-col">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className="size-1.5 rounded-full bg-flow pulse-dot" />
+            <h3 className="font-bold text-sm">Real-time tracker</h3>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">{bosses.length} bosses in scope</span>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-md border border-border hover:bg-surface-elevated text-muted-foreground">✕</button>
         </div>
-        <span className="text-[11px] text-muted-foreground font-mono">{bosses.length} bosses in scope</span>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Stage funnel */}
-        <div className="lg:col-span-2 bg-background border border-border rounded-xl p-4">
-          <TrackerLabel>Drop-off funnel · by stage</TrackerLabel>
-          <div className="space-y-1.5">
-            {byStage.map((s) => {
-              const pct = Math.round((s.bosses.length / total) * 100);
-              const w = (s.bosses.length / maxStageCount) * 100;
-              return (
-                <button
-                  key={s.stage}
-                  onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
-                  className="w-full flex items-center gap-3 text-left group"
-                  disabled={s.bosses.length === 0}
-                >
-                  <span className="w-24 text-[11px] font-medium text-muted-foreground shrink-0 truncate">
-                    {s.stage}
+        <div className="overflow-y-auto p-5 space-y-5">
+          {/* Top KPI strip */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            <KPI label="Bosses" value={bosses.length} />
+            <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}%`} />
+            <KPI label="Open roles" value={totalRoles} />
+            <KPI label="Open chats" value={totalOpenChats} />
+            <KPI label="Hired" value={totalHired} tone="flow" />
+            <KPI label="Not hired" value={totalNotHired} tone="warn" />
+            <KPI label="Active now" value={active.length} tone="flow" />
+            <KPI label="Idle" value={idle.length} />
+            <KPI label="No reply" value={noReply.length} tone="warn" />
+            <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} />
+            <KPI label="Closed chats" value={totalClosedChats} />
+            <KPI label="Avg intent" value={`${avgIntent}%`} />
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2 bg-background border border-border rounded-xl p-4">
+              <TrackerLabel>Drop-off funnel · by stage</TrackerLabel>
+              <div className="space-y-1.5">
+                {byStage.map((s) => {
+                  const p = Math.round((s.bosses.length / total) * 100);
+                  const w = (s.bosses.length / maxStageCount) * 100;
+                  return (
+                    <button
+                      key={s.stage}
+                      onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
+                      className="w-full flex items-center gap-3 text-left group"
+                      disabled={s.bosses.length === 0}
+                    >
+                      <span className="w-24 text-[11px] font-medium text-muted-foreground shrink-0 truncate">{s.stage}</span>
+                      <div className="flex-1 h-5 bg-surface rounded-md overflow-hidden border border-border relative">
+                        <div className="h-full bg-primary/70 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
+                        <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold">{s.bosses.length}</span>
+                      </div>
+                      <span className="w-10 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <MetricTile label="Happy" value={`${pct(happy.length, total)}%`} sub={`${happy.length} bosses`} tone="flow" onClick={() => onDrill({ title: "Happy bosses", bosses: happy })} />
+              <MetricTile label="Unhappy" value={`${pct(unhappy.length, total)}%`} sub={`${unhappy.length} bosses`} tone="warn" onClick={() => onDrill({ title: "Unhappy bosses", bosses: unhappy })} />
+              <MetricTile label="Neutral" value={`${pct(neutral.length, total)}%`} sub={`${neutral.length} bosses`} onClick={() => onDrill({ title: "Neutral bosses", bosses: neutral })} />
+              <MetricTile label="Active" value={`${active.length}`} sub={`${pct(active.length, total)}%`} tone="flow" onClick={() => onDrill({ title: "Active bosses", bosses: active })} />
+              <MetricTile label="No reply" value={`${noReply.length}`} sub={`${pct(noReply.length, total)}%`} tone="warn" onClick={() => onDrill({ title: "No-reply bosses", bosses: noReply })} />
+              <MetricTile label="Idle" value={`${idle.length}`} sub={`${pct(idle.length, total)}%`} onClick={() => onDrill({ title: "Idle bosses", bosses: idle })} />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="bg-background border border-border rounded-xl p-4">
+              <TrackerLabel>Swipe → DM ratio</TrackerLabel>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-mono font-bold">{swipeToDM}%</span>
+                <span className="text-[11px] text-muted-foreground">{dms}/{swipes}</span>
+              </div>
+              <div className="mt-2 h-1.5 bg-surface rounded-full overflow-hidden border border-border">
+                <div className="h-full bg-primary" style={{ width: `${swipeToDM}%` }} />
+              </div>
+            </div>
+
+            <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="bg-background border border-border rounded-xl p-4 text-left hover:border-flow/40 transition-colors">
+              <TrackerLabel>Positive closes</TrackerLabel>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-mono font-bold text-flow">{positiveClosed.length}</span>
+                <span className="text-[11px] text-muted-foreground">hired · accepted</span>
+              </div>
+              <div className="text-[10px] text-muted-foreground mt-2">Across {bossesWithPositive.length} bosses</div>
+            </button>
+
+            <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="bg-background border border-border rounded-xl p-4 text-left hover:border-warn/40 transition-colors">
+              <TrackerLabel>Negative closes · reasons</TrackerLabel>
+              <div className="flex items-baseline gap-2">
+                <span className="text-2xl font-mono font-bold text-warn">{negativeClosed.length}</span>
+                <span className="text-[11px] text-muted-foreground">unmatched</span>
+              </div>
+              <div className="flex flex-wrap gap-1 mt-2">
+                {Object.entries(negByReason).map(([r, n]) => (
+                  <span key={r} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-warn/10 text-warn border border-warn/20">
+                    {r} {n}
                   </span>
-                  <div className="flex-1 h-5 bg-surface rounded-md overflow-hidden border border-border relative">
-                    <div
-                      className="h-full bg-primary/70 group-hover:bg-primary transition-all"
-                      style={{ width: `${w}%` }}
-                    />
-                    <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold">
-                      {s.bosses.length}
-                    </span>
-                  </div>
-                  <span className="w-10 text-right text-[11px] font-mono text-muted-foreground shrink-0">
-                    {pct}%
-                  </span>
-                </button>
-              );
-            })}
+                ))}
+              </div>
+            </button>
           </div>
-        </div>
-
-        {/* Sentiment + status + onboarded */}
-        <div className="grid grid-cols-2 gap-3">
-          <MetricTile
-            label="Happy"
-            value={`${pct(happy.length, total)}%`}
-            sub={`${happy.length} bosses`}
-            tone="flow"
-            onClick={() => onDrill({ title: "Happy bosses", bosses: happy })}
-          />
-          <MetricTile
-            label="Unhappy"
-            value={`${pct(unhappy.length, total)}%`}
-            sub={`${unhappy.length} bosses`}
-            tone="warn"
-            onClick={() => onDrill({ title: "Unhappy bosses", bosses: unhappy })}
-          />
-          <MetricTile
-            label="Active now"
-            value={`${active.length}`}
-            sub={`${pct(active.length, total)}%`}
-            tone="flow"
-            onClick={() => onDrill({ title: "Active bosses", bosses: active })}
-          />
-          <MetricTile
-            label="No reply"
-            value={`${noReply.length}`}
-            sub={`${pct(noReply.length, total)}%`}
-            tone="warn"
-            onClick={() => onDrill({ title: "No-reply bosses", bosses: noReply })}
-          />
-          <MetricTile
-            label="Idle"
-            value={`${idle.length}`}
-            sub={`${pct(idle.length, total)}%`}
-            onClick={() => onDrill({ title: "Idle bosses", bosses: idle })}
-          />
-          <MetricTile
-            label="Onboarded"
-            value={`${onboarded.length}`}
-            sub={`${pct(onboarded.length, total)}%`}
-            onClick={() => onDrill({ title: "Onboarded bosses", bosses: onboarded })}
-          />
         </div>
       </div>
-
-      {/* Bottom row: swipe→dm, closed outcomes */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-        <div className="bg-background border border-border rounded-xl p-4">
-          <TrackerLabel>Swipe → DM ratio</TrackerLabel>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-mono font-bold">{swipeToDM}%</span>
-            <span className="text-[11px] text-muted-foreground">{dms}/{swipes}</span>
-          </div>
-          <div className="mt-2 h-1.5 bg-surface rounded-full overflow-hidden border border-border">
-            <div className="h-full bg-primary" style={{ width: `${swipeToDM}%` }} />
-          </div>
-        </div>
-
-        <button
-          onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })}
-          className="bg-background border border-border rounded-xl p-4 text-left hover:border-flow/40 transition-colors"
-        >
-          <TrackerLabel>Positive closes</TrackerLabel>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-mono font-bold text-flow">{positiveClosed.length}</span>
-            <span className="text-[11px] text-muted-foreground">hired · accepted</span>
-          </div>
-          <div className="text-[10px] text-muted-foreground mt-2">
-            Across {bossesWithPositive.length} bosses
-          </div>
-        </button>
-
-        <button
-          onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })}
-          className="bg-background border border-border rounded-xl p-4 text-left hover:border-warn/40 transition-colors"
-        >
-          <TrackerLabel>Negative closes</TrackerLabel>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-mono font-bold text-warn">{negativeClosed.length}</span>
-            <span className="text-[11px] text-muted-foreground">unmatched</span>
-          </div>
-          <div className="flex flex-wrap gap-1 mt-2">
-            {Object.entries(negByReason).slice(0, 4).map(([r, n]) => (
-              <span
-                key={r}
-                className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-warn/10 text-warn border border-warn/20"
-              >
-                {r} {n}
-              </span>
-            ))}
-          </div>
-        </button>
-      </div>
-    </section>
+    </div>
   );
 }
 
-function TrackerLabel({ children }: { children: React.ReactNode }) {
+function KPI({ label, value, sub, tone }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn" }) {
+  const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
   return (
-    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
-      {children}
+    <div className="bg-background border border-border rounded-lg px-3 py-2">
+      <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className={`text-base font-mono font-bold ${cls}`}>{value}</div>
+      {sub && <div className="text-[9px] text-muted-foreground font-mono">{sub}</div>}
     </div>
   );
 }
