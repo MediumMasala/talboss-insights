@@ -72,6 +72,7 @@ export interface CandidateChat {
   lastTs: number; // ms epoch — for chat-stream sort
   unread?: number;
   pinned?: boolean;
+  interviewChannel?: "app" | "external"; // where the interview happens, when relevant
   candidateProfile?: CandidateProfile;
   messages?: ChatMessage[];
 }
