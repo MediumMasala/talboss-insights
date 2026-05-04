@@ -72,6 +72,7 @@ export interface CandidateChat {
   lastTs: number; // ms epoch — for chat-stream sort
   unread?: number;
   pinned?: boolean;
+  interviewChannel?: "app" | "external"; // where the interview happens, when relevant
   candidateProfile?: CandidateProfile;
   messages?: ChatMessage[];
 }
@@ -518,6 +519,9 @@ BOSSES.forEach((boss) => {
   boss.candidateChats.forEach((c) => {
     if (!c.candidateProfile) c.candidateProfile = buildProfile(c);
     if (!c.messages) c.messages = buildThread(c, boss);
+    if (!c.interviewChannel) {
+      c.interviewChannel = hashStr(c.candidateName) % 2 === 0 ? "app" : "external";
+    }
   });
 });
 

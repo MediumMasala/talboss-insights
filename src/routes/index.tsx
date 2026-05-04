@@ -47,20 +47,22 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
   unhappy: { label: "Unhappy", cls: "text-warn" },
 };
 
+type Section = "alerts" | "overview" | "tracker" | "chats";
+
 function Dashboard() {
+  const [section, setSection] = useState<Section>("overview");
   const [view, setView] = useState<View>("all");
-  const [layout, setLayout] = useState<"grid" | "chat">("grid");
   const [me, setMe] = useState<string>("YS");
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<SearchScope>("all");
   const [stageFilter, setStageFilter] = useState<Stage | "all">("all");
   const [statusFilter, setStatusFilter] = useState<ChatStatus | "all">("all");
   const [sentimentFilter, setSentimentFilter] = useState<Sentiment | "all">("all");
-  const [teamFilter, setTeamFilter] = useState<string>("all"); // owner initials
+  const [teamFilter, setTeamFilter] = useState<string>("all");
   const [verifiedOnly, setVerifiedOnly] = useState(false);
+  const [interviewChannel, setInterviewChannel] = useState<"all" | "app" | "external">("all");
   const [selected, setSelected] = useState<Boss | null>(null);
   const [trackerDrill, setTrackerDrill] = useState<{ title: string; bosses: Boss[] } | null>(null);
-  const [trackerOpen, setTrackerOpen] = useState(false);
 
   const filtered = useMemo(() => {
     return BOSSES.filter((b) => {
@@ -86,67 +88,93 @@ function Dashboard() {
     });
   }, [view, me, search, scope, stageFilter, statusFilter, sentimentFilter, teamFilter, verifiedOnly]);
 
-  const alerts = filtered.filter((b) => b.alert).length;
+  const alertBosses = filtered.filter((b) => b.alert);
+  const alerts = alertBosses.length;
+
+  const interviewFiltered = useMemo(() => {
+    if (stageFilter !== "Interview" || interviewChannel === "all") return filtered;
+    return filtered.filter((b) =>
+      b.candidateChats.some((c) => c.interviewChannel === interviewChannel),
+    );
+  }, [filtered, stageFilter, interviewChannel]);
+
+  const sectionTitle: Record<Section, string> = {
+    alerts: "Alerts · critical cases",
+    overview: view === "all" ? "All bosses" : `My bosses · ${me}`,
+    tracker: "Trackers · live analytics",
+    chats: "Chats · grouped by boss",
+  };
 
   return (
-    <div className="min-h-dvh bg-background text-foreground">
-      <Header
-        view={view}
-        setView={setView}
-        me={me}
-        setMe={setMe}
-        search={search}
-        setSearch={setSearch}
-        scope={scope}
-        setScope={setScope}
+    <div className="min-h-dvh bg-background text-foreground flex">
+      <SideNav
+        section={section}
+        setSection={setSection}
         alerts={alerts}
+        bossCount={filtered.length}
+        chatCount={filtered.flatMap((b) => b.candidateChats).length}
       />
 
-      <FilterBar
-        stageFilter={stageFilter}
-        setStageFilter={setStageFilter}
-        statusFilter={statusFilter}
-        setStatusFilter={setStatusFilter}
-        sentimentFilter={sentimentFilter}
-        setSentimentFilter={setSentimentFilter}
-        teamFilter={teamFilter}
-        setTeamFilter={setTeamFilter}
-        verifiedOnly={verifiedOnly}
-        setVerifiedOnly={setVerifiedOnly}
-        count={filtered.length}
-        onOpenTracker={() => setTrackerOpen(true)}
-      />
-
-      <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-6">
-        <div className="flex items-center justify-between">
-          <SectionHeader
-            title={view === "all" ? (layout === "chat" ? "All chats" : "All bosses") : `My ${layout === "chat" ? "chats" : "bosses"} · ${me}`}
-            subtitle={layout === "chat" ? `${filtered.flatMap((b) => b.candidateChats).length} chats` : `${filtered.length} matches`}
-          />
-          <LayoutToggle layout={layout} setLayout={setLayout} />
-        </div>
-
-        {layout === "grid" ? (
-          <BossGrid bosses={filtered} onOpen={setSelected} />
-        ) : (
-          <ChatStream bosses={filtered} onOpenBoss={setSelected} />
-        )}
-      </main>
-
-      {trackerOpen && (
-        <TrackerModal
-          bosses={filtered}
-          onClose={() => setTrackerOpen(false)}
-          onDrill={(d) => {
-            setTrackerOpen(false);
-            setTrackerDrill(d);
-          }}
+      <div className="flex-1 min-w-0">
+        <Header
+          view={view}
+          setView={setView}
+          me={me}
+          setMe={setMe}
+          search={search}
+          setSearch={setSearch}
+          scope={scope}
+          setScope={setScope}
+          alerts={alerts}
+          onAlertsClick={() => setSection("alerts")}
         />
-      )}
 
-      {selected && (
-        <BossDrawer boss={selected} onClose={() => setSelected(null)} />
-      )}
+        <FilterBar
+          stageFilter={stageFilter}
+          setStageFilter={setStageFilter}
+          statusFilter={statusFilter}
+          setStatusFilter={setStatusFilter}
+          sentimentFilter={sentimentFilter}
+          setSentimentFilter={setSentimentFilter}
+          teamFilter={teamFilter}
+          setTeamFilter={setTeamFilter}
+          verifiedOnly={verifiedOnly}
+          setVerifiedOnly={setVerifiedOnly}
+          count={interviewFiltered.length}
+        />
+
+        <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
+          <SectionHeader
+            title={sectionTitle[section]}
+            subtitle={
+              section === "chats"
+                ? `${interviewFiltered.flatMap((b) => b.candidateChats).length} chats across ${interviewFiltered.length} bosses`
+                : section === "alerts"
+                ? `${alertBosses.length} bosses need attention`
+                : `${interviewFiltered.length} bosses in scope`
+            }
+          />
+
+          {stageFilter === "Interview" && (section === "overview" || section === "chats") && (
+            <InterviewChannelTabs value={interviewChannel} onChange={setInterviewChannel} bosses={filtered} />
+          )}
+
+          {section === "alerts" && (
+            <BossGrid bosses={alertBosses} onOpen={setSelected} emptyText="No active alerts. All boss conversations are healthy." />
+          )}
+          {section === "overview" && (
+            <BossGrid bosses={interviewFiltered} onOpen={setSelected} />
+          )}
+          {section === "tracker" && (
+            <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} />
+          )}
+          {section === "chats" && (
+            <ChatStream bosses={interviewFiltered} onOpenBoss={setSelected} />
+          )}
+        </main>
+      </div>
+
+      {selected && <BossDrawer boss={selected} onClose={() => setSelected(null)} />}
       {trackerDrill && (
         <DrillModal
           title={trackerDrill.title}
@@ -162,45 +190,130 @@ function Dashboard() {
   );
 }
 
-/* ---------- Layout toggle ---------- */
-function LayoutToggle({
-  layout,
-  setLayout,
+/* ---------- Sidebar nav ---------- */
+function SideNav({
+  section,
+  setSection,
+  alerts,
+  bossCount,
+  chatCount,
 }: {
-  layout: "grid" | "chat";
-  setLayout: (l: "grid" | "chat") => void;
+  section: Section;
+  setSection: (s: Section) => void;
+  alerts: number;
+  bossCount: number;
+  chatCount: number;
 }) {
+  const items: { key: Section; label: string; badge?: number; tone?: "warn"; icon: React.ReactNode }[] = [
+    {
+      key: "alerts",
+      label: "Alerts",
+      badge: alerts,
+      tone: "warn",
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>),
+    },
+    {
+      key: "overview",
+      label: "Overview",
+      badge: bossCount,
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>),
+    },
+    {
+      key: "tracker",
+      label: "Trackers",
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M3 3v18h18"/><path d="m7 14 4-4 4 4 5-5"/></svg>),
+    },
+    {
+      key: "chats",
+      label: "Chats",
+      badge: chatCount,
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>),
+    },
+  ];
+
   return (
-    <div className="flex p-1 bg-surface rounded-lg border border-border">
-      {(["grid", "chat"] as const).map((l) => (
+    <aside className="hidden md:flex w-56 shrink-0 flex-col border-r border-border bg-surface sticky top-0 h-dvh">
+      <div className="px-4 h-16 flex items-center gap-2 border-b border-border">
+        <div className="size-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-bold">T</div>
+        <div>
+          <div className="font-bold text-sm leading-none">TalBoss</div>
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground mt-1">Ops Admin</div>
+        </div>
+      </div>
+      <nav className="p-2 space-y-0.5">
+        {items.map((it) => {
+          const active = section === it.key;
+          const isAlertWarn = it.tone === "warn" && (it.badge ?? 0) > 0;
+          return (
+            <button
+              key={it.key}
+              onClick={() => setSection(it.key)}
+              className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm font-semibold transition-colors ${
+                active ? "bg-primary/10 text-primary" : "text-foreground/80 hover:bg-surface-elevated hover:text-foreground"
+              }`}
+            >
+              <span className={isAlertWarn && !active ? "text-warn" : ""}>{it.icon}</span>
+              <span className="flex-1 text-left">{it.label}</span>
+              {typeof it.badge === "number" && it.badge > 0 && (
+                <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full ${
+                  isAlertWarn ? "bg-warn/15 text-warn" : active ? "bg-primary text-primary-foreground" : "bg-surface-elevated text-muted-foreground border border-border"
+                }`}>{it.badge}</span>
+              )}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="mt-auto p-3 text-[10px] text-muted-foreground border-t border-border">
+        Grapevine internal · v0.4
+      </div>
+    </aside>
+  );
+}
+
+/* ---------- Interview channel tabs ---------- */
+function InterviewChannelTabs({
+  value,
+  onChange,
+  bosses,
+}: {
+  value: "all" | "app" | "external";
+  onChange: (v: "all" | "app" | "external") => void;
+  bosses: Boss[];
+}) {
+  const all = bosses.flatMap((b) => b.candidateChats);
+  const app = all.filter((c) => c.interviewChannel === "app").length;
+  const ext = all.filter((c) => c.interviewChannel === "external").length;
+  const opts: { k: "all" | "app" | "external"; label: string; count: number }[] = [
+    { k: "all", label: "All interviews", count: app + ext },
+    { k: "app", label: "On TalBoss app", count: app },
+    { k: "external", label: "External (Meet · Zoom)", count: ext },
+  ];
+  return (
+    <div className="flex items-center gap-1.5 p-1 bg-surface border border-border rounded-lg w-fit">
+      {opts.map((o) => (
         <button
-          key={l}
-          onClick={() => setLayout(l)}
-          className={`px-3 py-1 rounded-md text-xs font-semibold transition-all ${
-            layout === l
-              ? "bg-surface-elevated text-foreground"
-              : "text-muted-foreground hover:text-foreground"
+          key={o.k}
+          onClick={() => onChange(o.k)}
+          className={`px-3 py-1 rounded-md text-xs font-semibold ${
+            value === o.k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
           }`}
         >
-          {l === "grid" ? "Bosses" : "Chats"}
+          {o.label} <span className="font-mono opacity-70">· {o.count}</span>
         </button>
       ))}
     </div>
   );
 }
 
-/* ---------- Tracker Modal (real-time analytics, opened from filter bar icon) ---------- */
-function TrackerModal({
+/* ---------- Tracker Panel (inline analytics) ---------- */
+function TrackerPanel({
   bosses,
-  onClose,
   onDrill,
 }: {
   bosses: Boss[];
-  onClose: () => void;
   onDrill: (d: { title: string; bosses: Boss[] }) => void;
 }) {
   const total = bosses.length || 1;
-
   const byStage = STAGES.map((s) => ({ stage: s, bosses: bosses.filter((b) => b.stage === s) }));
   const maxStageCount = Math.max(1, ...byStage.map((s) => s.bosses.length));
   const happy = bosses.filter((b) => b.sentiment === "happy");
@@ -219,6 +332,10 @@ function TrackerModal({
   negativeClosed.forEach((c) => {
     if (c.closeReason) negByReason[c.closeReason] = (negByReason[c.closeReason] ?? 0) + 1;
   });
+  const posByReason: Record<string, number> = {};
+  positiveClosed.forEach((c) => {
+    if (c.closeReason) posByReason[c.closeReason] = (posByReason[c.closeReason] ?? 0) + 1;
+  });
   const swipes = bosses.reduce((s, b) => s + b.swipedToDM, 0);
   const dms = bosses.reduce((s, b) => s + b.dmAccepted, 0);
   const swipeToDM = swipes ? Math.round((dms / swipes) * 100) : 0;
@@ -228,6 +345,10 @@ function TrackerModal({
   const totalOpenChats = bosses.reduce((s, b) => s + b.chatsOpen, 0);
   const totalClosedChats = bosses.reduce((s, b) => s + b.chatsClosed, 0);
   const avgIntent = Math.round(bosses.reduce((s, b) => s + b.hiringIntent, 0) / (bosses.length || 1));
+  const dmAcceptRate = swipes ? Math.round((dms / swipes) * 100) : 0;
+  const hireRate = totalHired + totalNotHired ? Math.round((totalHired / (totalHired + totalNotHired)) * 100) : 0;
+  const interviewApp = allChats.filter((c) => c.interviewChannel === "app").length;
+  const interviewExt = allChats.filter((c) => c.interviewChannel === "external").length;
 
   const bossesWithPositive = bosses.filter((b) =>
     b.candidateChats.some((c) => c.closeReason && POSITIVE_CLOSE.includes(c.closeReason)),
@@ -237,112 +358,165 @@ function TrackerModal({
   );
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal>
-      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
-      <div className="relative w-full max-w-5xl max-h-[90dvh] bg-surface border border-border rounded-2xl shadow-xl overflow-hidden animate-fade-in flex flex-col">
-        <div className="p-4 border-b border-border flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-flow pulse-dot" />
-            <h3 className="font-bold text-sm">Real-time tracker</h3>
-            <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-mono">{bosses.length} bosses in scope</span>
+    <div className="space-y-5">
+      {/* Headline KPIs */}
+      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+        <KPI label="Bosses" value={bosses.length} />
+        <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}% of total`} />
+        <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} />
+        <KPI label="Open roles" value={totalRoles} />
+        <KPI label="Open chats" value={totalOpenChats} />
+        <KPI label="Closed chats" value={totalClosedChats} />
+        <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% hire rate`} />
+        <KPI label="Not hired" value={totalNotHired} tone="warn" />
+        <KPI label="Active now" value={active.length} tone="flow" />
+        <KPI label="Idle" value={idle.length} />
+        <KPI label="No reply" value={noReply.length} tone="warn" />
+        <KPI label="Avg intent" value={`${avgIntent}%`} />
+      </div>
+
+      {/* Funnel + sentiment */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-4 shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <TrackerLabel>Pipeline funnel · by stage</TrackerLabel>
+            <span className="text-[10px] font-mono text-muted-foreground">{total} bosses</span>
           </div>
-          <button onClick={onClose} className="size-8 rounded-md border border-border hover:bg-surface-elevated text-muted-foreground">✕</button>
+          <div className="space-y-1.5">
+            {byStage.map((s) => {
+              const p = Math.round((s.bosses.length / total) * 100);
+              const w = (s.bosses.length / maxStageCount) * 100;
+              return (
+                <button
+                  key={s.stage}
+                  onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
+                  className="w-full flex items-center gap-3 text-left group"
+                  disabled={s.bosses.length === 0}
+                >
+                  <span className="w-24 text-[11px] font-semibold text-foreground/80 shrink-0 truncate">{s.stage}</span>
+                  <div className="flex-1 h-6 bg-surface rounded-md overflow-hidden border border-border relative">
+                    <div className="h-full bg-primary/80 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
+                    <span className="absolute inset-0 flex items-center px-2 text-[11px] font-mono font-bold text-foreground">{s.bosses.length}</span>
+                  </div>
+                  <span className="w-12 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
+                </button>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="overflow-y-auto p-5 space-y-5">
-          {/* Top KPI strip */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            <KPI label="Bosses" value={bosses.length} />
-            <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}%`} />
-            <KPI label="Open roles" value={totalRoles} />
-            <KPI label="Open chats" value={totalOpenChats} />
-            <KPI label="Hired" value={totalHired} tone="flow" />
-            <KPI label="Not hired" value={totalNotHired} tone="warn" />
-            <KPI label="Active now" value={active.length} tone="flow" />
-            <KPI label="Idle" value={idle.length} />
-            <KPI label="No reply" value={noReply.length} tone="warn" />
-            <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} />
-            <KPI label="Closed chats" value={totalClosedChats} />
-            <KPI label="Avg intent" value={`${avgIntent}%`} />
+        <div className="grid grid-cols-2 gap-2">
+          <MetricTile label="Happy" value={`${pct(happy.length, total)}%`} sub={`${happy.length} bosses`} tone="flow" onClick={() => onDrill({ title: "Happy bosses", bosses: happy })} />
+          <MetricTile label="Unhappy" value={`${pct(unhappy.length, total)}%`} sub={`${unhappy.length} bosses`} tone="warn" onClick={() => onDrill({ title: "Unhappy bosses", bosses: unhappy })} />
+          <MetricTile label="Neutral" value={`${pct(neutral.length, total)}%`} sub={`${neutral.length} bosses`} onClick={() => onDrill({ title: "Neutral bosses", bosses: neutral })} />
+          <MetricTile label="Active" value={`${active.length}`} sub={`${pct(active.length, total)}%`} tone="flow" onClick={() => onDrill({ title: "Active bosses", bosses: active })} />
+          <MetricTile label="Idle" value={`${idle.length}`} sub={`${pct(idle.length, total)}%`} onClick={() => onDrill({ title: "Idle bosses", bosses: idle })} />
+          <MetricTile label="No reply" value={`${noReply.length}`} sub={`${pct(noReply.length, total)}%`} tone="warn" onClick={() => onDrill({ title: "No-reply bosses", bosses: noReply })} />
+        </div>
+      </div>
+
+      {/* Conversion + interview channels */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+          <TrackerLabel>Swipe → DM conversion</TrackerLabel>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-mono font-bold text-foreground">{swipeToDM}%</span>
+            <span className="text-[11px] text-muted-foreground font-mono">{dms} / {swipes} swipes</span>
           </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2 bg-background border border-border rounded-xl p-4">
-              <TrackerLabel>Drop-off funnel · by stage</TrackerLabel>
-              <div className="space-y-1.5">
-                {byStage.map((s) => {
-                  const p = Math.round((s.bosses.length / total) * 100);
-                  const w = (s.bosses.length / maxStageCount) * 100;
-                  return (
-                    <button
-                      key={s.stage}
-                      onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
-                      className="w-full flex items-center gap-3 text-left group"
-                      disabled={s.bosses.length === 0}
-                    >
-                      <span className="w-24 text-[11px] font-medium text-muted-foreground shrink-0 truncate">{s.stage}</span>
-                      <div className="flex-1 h-5 bg-surface rounded-md overflow-hidden border border-border relative">
-                        <div className="h-full bg-primary/70 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
-                        <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold">{s.bosses.length}</span>
-                      </div>
-                      <span className="w-10 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <MetricTile label="Happy" value={`${pct(happy.length, total)}%`} sub={`${happy.length} bosses`} tone="flow" onClick={() => onDrill({ title: "Happy bosses", bosses: happy })} />
-              <MetricTile label="Unhappy" value={`${pct(unhappy.length, total)}%`} sub={`${unhappy.length} bosses`} tone="warn" onClick={() => onDrill({ title: "Unhappy bosses", bosses: unhappy })} />
-              <MetricTile label="Neutral" value={`${pct(neutral.length, total)}%`} sub={`${neutral.length} bosses`} onClick={() => onDrill({ title: "Neutral bosses", bosses: neutral })} />
-              <MetricTile label="Active" value={`${active.length}`} sub={`${pct(active.length, total)}%`} tone="flow" onClick={() => onDrill({ title: "Active bosses", bosses: active })} />
-              <MetricTile label="No reply" value={`${noReply.length}`} sub={`${pct(noReply.length, total)}%`} tone="warn" onClick={() => onDrill({ title: "No-reply bosses", bosses: noReply })} />
-              <MetricTile label="Idle" value={`${idle.length}`} sub={`${pct(idle.length, total)}%`} onClick={() => onDrill({ title: "Idle bosses", bosses: idle })} />
-            </div>
+          <div className="mt-2 h-2 bg-surface rounded-full overflow-hidden border border-border">
+            <div className="h-full bg-primary" style={{ width: `${swipeToDM}%` }} />
           </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
+            <div><span className="text-muted-foreground">DM accept rate</span><div className="font-mono font-bold text-sm text-foreground">{dmAcceptRate}%</div></div>
+            <div><span className="text-muted-foreground">Avg intent</span><div className="font-mono font-bold text-sm text-foreground">{avgIntent}%</div></div>
+          </div>
+        </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="bg-background border border-border rounded-xl p-4">
-              <TrackerLabel>Swipe → DM ratio</TrackerLabel>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-mono font-bold">{swipeToDM}%</span>
-                <span className="text-[11px] text-muted-foreground">{dms}/{swipes}</span>
-              </div>
-              <div className="mt-2 h-1.5 bg-surface rounded-full overflow-hidden border border-border">
-                <div className="h-full bg-primary" style={{ width: `${swipeToDM}%` }} />
-              </div>
-            </div>
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+          <TrackerLabel>Interview channels</TrackerLabel>
+          <ChannelBar label="On TalBoss app" value={interviewApp} total={interviewApp + interviewExt || 1} tone="flow" />
+          <div className="h-2" />
+          <ChannelBar label="External (Meet · Zoom)" value={interviewExt} total={interviewApp + interviewExt || 1} />
+          <div className="text-[10px] text-muted-foreground mt-3">
+            Use the <span className="font-semibold text-foreground">Stage = Interview</span> filter to drill in.
+          </div>
+        </div>
 
-            <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="bg-background border border-border rounded-xl p-4 text-left hover:border-flow/40 transition-colors">
-              <TrackerLabel>Positive closes</TrackerLabel>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-mono font-bold text-flow">{positiveClosed.length}</span>
-                <span className="text-[11px] text-muted-foreground">hired · accepted</span>
+        <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="bg-card border border-border rounded-xl p-4 text-left hover:border-warn/40 shadow-sm transition-colors">
+          <TrackerLabel>Negative closes · reasons</TrackerLabel>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-mono font-bold text-warn">{negativeClosed.length}</span>
+            <span className="text-[11px] text-muted-foreground">across {bossesWithNegative.length} bosses</span>
+          </div>
+          <div className="mt-3 space-y-1">
+            {Object.entries(negByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+              <div key={r} className="flex items-center gap-2 text-[11px]">
+                <span className="flex-1 truncate">{r}</span>
+                <span className="font-mono font-bold text-warn">{n}</span>
               </div>
-              <div className="text-[10px] text-muted-foreground mt-2">Across {bossesWithPositive.length} bosses</div>
-            </button>
+            ))}
+            {negativeClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
+          </div>
+        </button>
+      </div>
 
-            <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="bg-background border border-border rounded-xl p-4 text-left hover:border-warn/40 transition-colors">
-              <TrackerLabel>Negative closes · reasons</TrackerLabel>
-              <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-mono font-bold text-warn">{negativeClosed.length}</span>
-                <span className="text-[11px] text-muted-foreground">unmatched</span>
+      {/* Positive closes detail */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="bg-card border border-border rounded-xl p-4 text-left hover:border-flow/40 shadow-sm transition-colors">
+          <TrackerLabel>Positive closes · reasons</TrackerLabel>
+          <div className="flex items-baseline gap-2">
+            <span className="text-2xl font-mono font-bold text-flow">{positiveClosed.length}</span>
+            <span className="text-[11px] text-muted-foreground">across {bossesWithPositive.length} bosses</span>
+          </div>
+          <div className="mt-3 space-y-1">
+            {Object.entries(posByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+              <div key={r} className="flex items-center gap-2 text-[11px]">
+                <span className="flex-1 truncate">{r}</span>
+                <span className="font-mono font-bold text-flow">{n}</span>
               </div>
-              <div className="flex flex-wrap gap-1 mt-2">
-                {Object.entries(negByReason).map(([r, n]) => (
-                  <span key={r} className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-warn/10 text-warn border border-warn/20">
-                    {r} {n}
-                  </span>
-                ))}
-              </div>
-            </button>
+            ))}
+            {positiveClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
+          </div>
+        </button>
+
+        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+          <TrackerLabel>Owner load</TrackerLabel>
+          <div className="space-y-1.5">
+            {OWNERS.map((o) => {
+              const owned = bosses.filter((b) => b.ownerInitials === o.initials);
+              const w = (owned.length / Math.max(1, bosses.length)) * 100;
+              return (
+                <button key={o.initials} onClick={() => onDrill({ title: `Owner · ${o.name}`, bosses: owned })} className="w-full text-left flex items-center gap-3">
+                  <span className="w-24 text-[11px] font-semibold truncate">{o.name.split(" ")[0]}</span>
+                  <div className="flex-1 h-5 bg-surface rounded-md overflow-hidden border border-border relative">
+                    <div className="h-full bg-primary/70" style={{ width: `${w}%` }} />
+                    <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold">{owned.length}</span>
+                  </div>
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
     </div>
   );
 }
+
+function ChannelBar({ label, value, total, tone }: { label: string; value: number; total: number; tone?: "flow" }) {
+  const w = Math.round((value / total) * 100);
+  return (
+    <div>
+      <div className="flex items-center justify-between text-[11px] mb-1">
+        <span className="text-foreground/80 font-semibold">{label}</span>
+        <span className="font-mono text-muted-foreground">{value} · {w}%</span>
+      </div>
+      <div className="h-2 bg-surface rounded-full overflow-hidden border border-border">
+        <div className={`h-full ${tone === "flow" ? "bg-flow" : "bg-primary"}`} style={{ width: `${w}%` }} />
+      </div>
+    </div>
+  );
+}
+
 
 function KPI({ label, value, sub, tone }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn" }) {
   const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
@@ -457,6 +631,7 @@ function Header({
   scope,
   setScope,
   alerts,
+  onAlertsClick,
 }: {
   view: View;
   setView: (v: View) => void;
@@ -467,6 +642,7 @@ function Header({
   scope: SearchScope;
   setScope: (s: SearchScope) => void;
   alerts: number;
+  onAlertsClick?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [scopeOpen, setScopeOpen] = useState(false);
@@ -595,10 +771,13 @@ function Header({
         </div>
 
         {alerts > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-warn/30 bg-warn/10">
+          <button
+            onClick={onAlertsClick}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-warn/30 bg-warn/10 hover:bg-warn/15 transition-colors"
+          >
             <span className="size-1.5 rounded-full bg-warn pulse-dot" />
             <span className="text-xs font-semibold text-warn">{alerts} alerts</span>
-          </div>
+          </button>
         )}
 
         {/* Owner switcher */}
@@ -668,7 +847,6 @@ function FilterBar(props: {
   verifiedOnly: boolean;
   setVerifiedOnly: (v: boolean) => void;
   count: number;
-  onOpenTracker: () => void;
 }) {
   const {
     stageFilter, setStageFilter,
@@ -677,7 +855,6 @@ function FilterBar(props: {
     teamFilter, setTeamFilter,
     verifiedOnly, setVerifiedOnly,
     count,
-    onOpenTracker,
   } = props;
   const [open, setOpen] = useState(false);
 
@@ -741,21 +918,6 @@ function FilterBar(props: {
 
       <div className="ml-auto flex items-center gap-2">
         <span className="text-xs text-muted-foreground font-mono">{count} bosses</span>
-        <button
-          onClick={onOpenTracker}
-          title="Open real-time tracker"
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-md border border-border bg-surface hover:border-primary/40 hover:bg-surface-elevated transition-colors text-[11px] font-semibold"
-        >
-          <span className="relative flex items-center justify-center size-3">
-            <span className="absolute inset-0 rounded-full bg-flow/40 animate-ping" />
-            <span className="size-1.5 rounded-full bg-flow" />
-          </span>
-          <svg className="size-3.5 text-muted-foreground" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M3 3v18h18" />
-            <path d="m7 14 4-4 4 4 5-5" />
-          </svg>
-          Tracker
-        </button>
       </div>
 
       {open && (
@@ -865,8 +1027,8 @@ function EmptyHint({ text }: { text: string }) {
 }
 
 /* ---------- Boss Grid + Card ---------- */
-function BossGrid({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) => void }) {
-  if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
+function BossGrid({ bosses, onOpen, emptyText }: { bosses: Boss[]; onOpen: (b: Boss) => void; emptyText?: string }) {
+  if (bosses.length === 0) return <EmptyHint text={emptyText ?? "No bosses match the current filters."} />;
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
       {bosses.map((b) => (
@@ -979,98 +1141,158 @@ function ChatStream({
 }) {
   const [seg, setSeg] = useState<"all" | "open" | "closed">("all");
   const [selectedChat, setSelectedChat] = useState<CandidateChat | null>(null);
+  const [expandedBoss, setExpandedBoss] = useState<string | null>(null);
 
   const inScopeIds = new Set(bosses.map((b) => b.id));
-  const all = useMemo(
-    () =>
-      ALL_CHATS.filter((c) => inScopeIds.has(c.bossId)).sort((a, b) => b.lastTs - a.lastTs),
+  const allChats = useMemo(
+    () => ALL_CHATS.filter((c) => inScopeIds.has(c.bossId)).sort((a, b) => b.lastTs - a.lastTs),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [bosses],
   );
-  const list = seg === "all" ? all : all.filter((c) => c.status === seg);
+  const filteredChats = seg === "all" ? allChats : allChats.filter((c) => c.status === seg);
 
-  const active = selectedChat && list.find((c) => c.id === selectedChat.id) ? selectedChat : list[0] ?? null;
+  // Group chats by boss, sort bosses by most recent chat in scope
+  const grouped = useMemo(() => {
+    const m = new Map<string, CandidateChat[]>();
+    filteredChats.forEach((c) => {
+      const arr = m.get(c.bossId) ?? [];
+      arr.push(c);
+      m.set(c.bossId, arr);
+    });
+    const entries: { boss: Boss; chats: CandidateChat[]; lastTs: number }[] = [];
+    m.forEach((chats, bossId) => {
+      const boss = bossById(bossId);
+      if (!boss) return;
+      entries.push({ boss, chats, lastTs: chats[0]?.lastTs ?? 0 });
+    });
+    entries.sort((a, b) => b.lastTs - a.lastTs);
+    return entries;
+  }, [filteredChats]);
+
+  const active = selectedChat && filteredChats.find((c) => c.id === selectedChat.id) ? selectedChat : filteredChats[0] ?? null;
   const activeBoss = active ? bossById(active.bossId) : null;
+  const effectiveExpanded = expandedBoss ?? active?.bossId ?? grouped[0]?.boss.id ?? null;
 
   return (
-    <div className="grid grid-cols-12 gap-4 h-[calc(100dvh-360px)] min-h-[560px] border border-border rounded-2xl overflow-hidden bg-surface">
+    <div className="grid grid-cols-12 gap-0 h-[calc(100dvh-340px)] min-h-[600px] border border-border rounded-2xl overflow-hidden bg-card shadow-sm">
       <aside className="col-span-5 border-r border-border overflow-hidden flex flex-col bg-surface">
-        <div className="p-3 border-b border-border flex items-center gap-1">
-          {(["all", "open", "closed"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => setSeg(s)}
-              className={`px-3 py-1 rounded-full text-[11px] font-semibold capitalize ${
-                seg === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {s} · {s === "all" ? all.length : all.filter((c) => c.status === s).length}
-            </button>
-          ))}
+        <div className="p-3 border-b border-border flex items-center justify-between gap-2">
+          <div className="flex items-center gap-1">
+            {(["all", "open", "closed"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setSeg(s)}
+                className={`px-2.5 py-1 rounded-full text-[11px] font-semibold capitalize ${
+                  seg === s ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {s} · {s === "all" ? allChats.length : allChats.filter((c) => c.status === s).length}
+              </button>
+            ))}
+          </div>
+          <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">
+            {grouped.length} bosses
+          </span>
         </div>
         <ul className="flex-1 overflow-y-auto divide-y divide-border">
-          {list.length === 0 && (
+          {grouped.length === 0 && (
             <li className="p-6 text-sm text-muted-foreground">No chats in scope.</li>
           )}
-          {list.map((c) => {
-            const boss = bossById(c.bossId);
-            const cs = statusMeta[c.chatStatus];
-            const isActive = active?.id === c.id;
+          {grouped.map(({ boss, chats }) => {
+            const expanded = effectiveExpanded === boss.id;
+            const ss = statusMeta[boss.status];
+            const unread = chats.reduce((s, c) => s + (c.unread ?? 0), 0);
             return (
-              <li key={c.id}>
+              <li key={boss.id}>
                 <button
-                  onClick={() => setSelectedChat(c)}
-                  className={`w-full text-left flex items-start gap-3 p-3 hover:bg-surface-elevated transition-colors ${
-                    isActive ? "bg-surface-elevated" : ""
+                  onClick={() => setExpandedBoss(expanded ? null : boss.id)}
+                  className={`w-full flex items-center gap-3 p-3 text-left hover:bg-surface-elevated transition-colors ${
+                    expanded ? "bg-surface-elevated" : ""
                   }`}
                 >
                   <div className="relative shrink-0">
-                    <div className="size-11 rounded-full bg-primary/15 text-primary flex items-center justify-center text-sm font-bold border border-primary/20">
-                      {initials(c.candidateName)}
+                    <div className="size-11 rounded-xl bg-primary text-primary-foreground flex items-center justify-center text-sm font-bold">
+                      {initials(boss.name)}
                     </div>
-                    <span className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-surface ${cs.dot}`} />
+                    <span className={`absolute -bottom-0.5 -right-0.5 size-3 rounded-full border-2 border-surface ${ss.dot}`} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-sm truncate">{c.candidateName}</span>
-                      <span className="text-[10px] text-muted-foreground font-mono shrink-0">{c.lastTime}</span>
+                      <span className="font-semibold text-sm truncate">{boss.name}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono shrink-0">{chats[0]?.lastTime}</span>
                     </div>
                     <div className="text-[11px] text-muted-foreground truncate">
-                      {c.forRole} · {boss?.company}
-                    </div>
-                    <div className="flex items-center justify-between gap-2 mt-0.5">
-                      <p className="text-xs text-muted-foreground truncate">{c.lastMessage}</p>
-                      {c.unread ? (
-                        <span className="text-[10px] font-bold bg-primary text-primary-foreground rounded-full size-4 flex items-center justify-center shrink-0">
-                          {c.unread}
-                        </span>
-                      ) : null}
+                      {boss.company} · {boss.role}
                     </div>
                     <div className="flex items-center gap-1 mt-1">
-                      {c.status === "closed" && c.closeReason ? (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded border ${
-                          POSITIVE_CLOSE.includes(c.closeReason)
-                            ? "bg-flow/10 text-flow border-flow/20"
-                            : "bg-warn/10 text-warn border-warn/20"
-                        }`}>
-                          {c.closeReason}
-                        </span>
-                      ) : (
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded border bg-surface ${cs.text} border-border`}>
-                          {cs.label}
-                        </span>
-                      )}
-                      {boss && (
-                        <span
-                          title={`Owner: ${boss.ownerInitials}`}
-                          className="text-[9px] px-1 py-0.5 rounded bg-surface border border-border text-muted-foreground"
-                        >
-                          {boss.ownerInitials}
+                      <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                        {chats.length} chats
+                      </span>
+                      <span className={`text-[9px] font-semibold px-1.5 py-0.5 rounded border bg-surface ${ss.text} border-border`}>
+                        {ss.label}
+                      </span>
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-surface border border-border text-muted-foreground">
+                        {boss.ownerInitials}
+                      </span>
+                      {unread > 0 && (
+                        <span className="ml-auto text-[10px] font-bold bg-primary text-primary-foreground rounded-full px-1.5 py-0.5">
+                          {unread} new
                         </span>
                       )}
                     </div>
                   </div>
+                  <svg className={`size-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
+
+                {expanded && (
+                  <ul className="bg-background/50 border-t border-border">
+                    {chats.map((c) => {
+                      const cs = statusMeta[c.chatStatus];
+                      const isActive = active?.id === c.id;
+                      return (
+                        <li key={c.id}>
+                          <button
+                            onClick={() => setSelectedChat(c)}
+                            className={`w-full text-left flex items-start gap-3 pl-6 pr-3 py-2.5 hover:bg-surface-elevated/60 transition-colors border-l-2 ${
+                              isActive ? "border-primary bg-surface-elevated/60" : "border-transparent"
+                            }`}
+                          >
+                            <div className="relative shrink-0">
+                              <div className="size-8 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[11px] font-bold border border-primary/20">
+                                {initials(c.candidateName)}
+                              </div>
+                              <span className={`absolute -bottom-0.5 -right-0.5 size-2.5 rounded-full border-2 border-background ${cs.dot}`} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-semibold text-[12px] truncate">{c.candidateName}</span>
+                                <span className="text-[10px] text-muted-foreground font-mono shrink-0">{c.lastTime}</span>
+                              </div>
+                              <div className="text-[10px] text-muted-foreground truncate">{c.forRole}</div>
+                              <p className="text-[11px] text-muted-foreground truncate mt-0.5">{c.lastMessage}</p>
+                              <div className="flex items-center gap-1 mt-1 flex-wrap">
+                                {c.status === "closed" && c.closeReason ? (
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded border ${
+                                    POSITIVE_CLOSE.includes(c.closeReason)
+                                      ? "bg-flow/10 text-flow border-flow/20"
+                                      : "bg-warn/10 text-warn border-warn/20"
+                                  }`}>{c.closeReason}</span>
+                                ) : (
+                                  <span className={`text-[9px] px-1.5 py-0.5 rounded border bg-surface ${cs.text} border-border`}>{cs.label}</span>
+                                )}
+                                {c.interviewChannel && (
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-surface border border-border text-muted-foreground">
+                                    {c.interviewChannel === "app" ? "📱 App" : "🔗 External"}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </li>
             );
           })}
