@@ -1693,28 +1693,12 @@ function ChatDetail({
       </div>
 
       <div className="p-5 space-y-5">
+        {/* 5-dot journey */}
+        <ChatJourney chat={chat} />
+
         {/* Two profile strips: candidate + boss */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="p-3 rounded-xl bg-surface border border-border">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold border border-primary/20">
-                {initials(chat.candidateName)}
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Candidate</div>
-                <div className="font-semibold text-sm truncate">{chat.candidateName}</div>
-                <div className="text-[11px] text-muted-foreground truncate">{chat.candidateRole}</div>
-              </div>
-            </div>
-            {chat.candidateProfile && (
-              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                <ProfRow k="Exp" v={chat.candidateProfile.experience} />
-                <ProfRow k="Loc" v={chat.candidateProfile.location} />
-                <ProfRow k="Now" v={chat.candidateProfile.currentCompany} />
-                <ProfRow k="Expects" v={chat.candidateProfile.expectedComp} />
-              </div>
-            )}
-          </div>
+          <CandidateProfileCard chat={chat} />
 
           <button
             onClick={() => onOpenBoss(boss)}
