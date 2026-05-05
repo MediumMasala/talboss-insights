@@ -47,7 +47,7 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
   unhappy: { label: "Unhappy", cls: "text-warn" },
 };
 
-type Section = "alerts" | "overview" | "tracker" | "chats";
+type Section = "overview" | "tracker" | "chats";
 type Severity = "critical" | "warning" | "nudge" | "healthy";
 
 /* ---------- Health + severity helpers ---------- */
