@@ -1470,16 +1470,6 @@ function Tag({ children, muted }: { children: React.ReactNode; muted?: boolean }
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: number | string; accent?: boolean }) {
-  return (
-    <div>
-      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{label}</p>
-      <p className={`text-base font-mono font-bold ${accent ? "text-primary" : "text-foreground"}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
 
 /* ---------- Chat stream (chat-wise, recency-sorted) ---------- */
 function ChatStream({
