@@ -1783,6 +1783,79 @@ function ProfRow({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
   );
 }
 
+/* ---------- Chat journey 5-dot ---------- */
+function ChatJourney({ chat }: { chat: CandidateChat }) {
+  const idx = chatJourneyIndex(chat);
+  return (
+    <div className="p-3 rounded-xl bg-surface border border-border">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Journey</span>
+        <span className="text-[10px] font-mono text-muted-foreground">{CHAT_JOURNEY[idx]}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        {CHAT_JOURNEY.map((s, i) => {
+          const done = i <= idx;
+          return (
+            <div key={s} className="flex items-center gap-1 flex-1 last:flex-none">
+              <div className="flex flex-col items-center gap-1">
+                <span className={`size-3 rounded-full border-2 ${done ? "bg-primary border-primary" : "bg-transparent border-border"}`} />
+                <span className={`text-[9px] font-semibold ${done ? "text-foreground" : "text-muted-foreground"}`}>{s}</span>
+              </div>
+              {i < CHAT_JOURNEY.length - 1 && (
+                <div className={`flex-1 h-0.5 ${i < idx ? "bg-primary" : "bg-border"}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Candidate profile card (richer like boss) ---------- */
+function CandidateProfileCard({ chat }: { chat: CandidateChat }) {
+  const [open, setOpen] = useState(false);
+  const p = chat.candidateProfile;
+  return (
+    <div className="p-3 rounded-xl bg-surface border border-border">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 text-left">
+        <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold border border-primary/20">
+          {initials(chat.candidateName)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Candidate · click for more</div>
+          <div className="font-semibold text-sm truncate">{chat.candidateName}</div>
+          <div className="text-[11px] text-muted-foreground truncate">{chat.candidateRole} · for {chat.forRole}</div>
+        </div>
+        <span className={`text-[10px] text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+      {p && (
+        <div className="grid grid-cols-2 gap-1.5 text-[11px] mt-3">
+          <ProfRow k="Exp" v={p.experience} />
+          <ProfRow k="Loc" v={p.location} />
+          <ProfRow k="Now" v={p.currentCompany} />
+          <ProfRow k="Expects" v={p.expectedComp} />
+        </div>
+      )}
+      {open && p && (
+        <div className="mt-3 pt-3 border-t border-border space-y-2">
+          <div className="grid grid-cols-1 gap-1.5 text-[11px]">
+            <ProfRow k="Email" v={p.email} mono />
+            <ProfRow k="Phone" v={p.phone} mono />
+            <ProfRow k="Role" v={chat.forRole} />
+            <ProfRow k="Status" v={chat.status === "closed" ? (chat.closeReason ?? "Closed") : statusMeta[chat.chatStatus].label} />
+            <ProfRow k="Channel" v={chat.interviewChannel === "app" ? "TalBoss app" : chat.interviewChannel === "external" ? "External (Meet/Zoom)" : "—"} />
+          </div>
+          <div className="flex gap-1.5 pt-1">
+            <button className="flex-1 text-[11px] font-bold px-2 py-1.5 rounded bg-primary text-primary-foreground">Message</button>
+            <button className="flex-1 text-[11px] font-bold px-2 py-1.5 rounded bg-surface-elevated border border-border">Schedule</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 /* ---------- Drawer ---------- */
 type DrawerTab = "overview" | "roles" | "chats";
