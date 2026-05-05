@@ -682,12 +682,15 @@ function ChannelBar({ label, value, total, tone }: { label: string; value: numbe
 }
 
 
-function KPI({ label, value, sub, tone }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn" }) {
+function KPI({ label, value, sub, tone, series }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn"; series?: number[] }) {
   const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
   return (
     <div className="bg-background border border-border rounded-lg px-3 py-2">
       <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`text-base font-mono font-bold ${cls}`}>{value}</div>
+      <div className="flex items-end justify-between gap-2">
+        <div className={`text-base font-mono font-bold ${cls}`}>{value}</div>
+        {series && <Sparkline data={series} tone={tone} />}
+      </div>
       {sub && <div className="text-[9px] text-muted-foreground font-mono">{sub}</div>}
     </div>
   );
