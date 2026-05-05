@@ -259,6 +259,8 @@ function Dashboard() {
           count={interviewFiltered.length}
         />
 
+        <ActivityTicker bosses={BOSSES} />
+
         <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
           <SectionHeader
             title={sectionTitle[section]}
@@ -276,10 +278,10 @@ function Dashboard() {
           )}
 
           {section === "alerts" && (
-            <BossGrid bosses={alertBosses} onOpen={setSelected} emptyText="No active alerts. All boss conversations are healthy." />
+            <AlertsPanel bosses={filtered} onOpen={setSelected} />
           )}
           {section === "overview" && (
-            <BossGrid bosses={interviewFiltered} onOpen={setSelected} />
+            <OverviewZones bosses={interviewFiltered} onOpen={setSelected} />
           )}
           {section === "tracker" && (
             <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} />
