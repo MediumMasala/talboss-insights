@@ -475,22 +475,68 @@ function TrackerPanel({
     b.candidateChats.some((c) => c.closeReason && NEGATIVE_CLOSE.includes(c.closeReason)),
   );
 
+  // What changed today (synthetic from data + seeded series)
+  const changes = [
+    `${active.length} bosses active in the last hour (▲ ${Math.max(1, Math.round(active.length * 0.3))} vs yesterday)`,
+    `${noReply.length} bosses now in no-reply (▲ ${Math.max(0, noReply.length - 1)} since yesterday)`,
+    `${positiveClosed.length} positive closes this week · ${negativeClosed.length} negative`,
+    `${interviewApp} interviews on app · ${interviewExt} external (${pct(interviewApp, interviewApp + interviewExt || 1)}% on-app)`,
+    `Avg intent ${avgIntent}% across ${bosses.length} bosses · ${verified.length} verified`,
+  ];
+
+  // Stage movements (synthetic, deterministic)
+  const moves: { from: Stage; to: Stage; n: number }[] = [];
+  for (let i = 0; i < STAGES.length - 1; i++) {
+    const seed = seedSeries(STAGES[i] + STAGES[i + 1], 1, 3)[0];
+    const n = Math.max(1, seed % 4);
+    moves.push({ from: STAGES[i], to: STAGES[i + 1], n });
+  }
+
   return (
     <div className="space-y-5">
-      {/* Headline KPIs */}
+      {/* What changed today */}
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+        <TrackerLabel>What changed today</TrackerLabel>
+        <ul className="space-y-1.5">
+          {changes.map((c, i) => (
+            <li key={i} className="flex items-start gap-2 text-[12px] text-foreground/90">
+              <span className="size-1 rounded-full bg-primary mt-1.5 shrink-0" />
+              <span>{c}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Headline KPIs with sparklines */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-        <KPI label="Bosses" value={bosses.length} />
-        <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}% of total`} />
-        <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} />
-        <KPI label="Open roles" value={totalRoles} />
-        <KPI label="Open chats" value={totalOpenChats} />
-        <KPI label="Closed chats" value={totalClosedChats} />
-        <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% hire rate`} />
-        <KPI label="Not hired" value={totalNotHired} tone="warn" />
-        <KPI label="Active now" value={active.length} tone="flow" />
-        <KPI label="Idle" value={idle.length} />
-        <KPI label="No reply" value={noReply.length} tone="warn" />
-        <KPI label="Avg intent" value={`${avgIntent}%`} />
+        <KPI label="Bosses" value={bosses.length} series={seedSeries("bosses", 14, bosses.length)} />
+        <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}% of total`} series={seedSeries("verified", 14, verified.length * 5)} tone="flow" />
+        <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} series={seedSeries("onboarded", 14, onboarded.length * 5)} />
+        <KPI label="Open roles" value={totalRoles} series={seedSeries("openroles", 14, totalRoles * 4)} />
+        <KPI label="Open chats" value={totalOpenChats} series={seedSeries("openchats", 14, totalOpenChats * 3)} />
+        <KPI label="Closed chats" value={totalClosedChats} series={seedSeries("closedchats", 14, totalClosedChats * 3)} />
+        <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% hire rate`} series={seedSeries("hired", 14, totalHired * 8)} />
+        <KPI label="Not hired" value={totalNotHired} tone="warn" series={seedSeries("nothired", 14, totalNotHired * 6)} />
+        <KPI label="Active now" value={active.length} tone="flow" series={seedSeries("active", 14, active.length * 6)} />
+        <KPI label="Idle" value={idle.length} series={seedSeries("idle", 14, idle.length * 6)} />
+        <KPI label="No reply" value={noReply.length} tone="warn" series={seedSeries("noreply", 14, noReply.length * 6)} />
+        <KPI label="Avg intent" value={`${avgIntent}%`} series={seedSeries("intent", 14, avgIntent)} />
+      </div>
+
+      {/* Stage movements */}
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+        <TrackerLabel>Stage movement · this week</TrackerLabel>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          {moves.map((m) => (
+            <div key={`${m.from}-${m.to}`} className="flex items-center gap-2 text-[12px] p-2 rounded-md bg-surface border border-border">
+              <span className="font-mono font-bold text-primary">{m.n}</span>
+              <span className="text-muted-foreground">moved</span>
+              <span className="font-semibold truncate">{m.from}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="font-semibold truncate">{m.to}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Funnel + sentiment */}
