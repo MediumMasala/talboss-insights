@@ -215,7 +215,6 @@ function Dashboard() {
   }, [filtered, stageFilter, interviewChannel]);
 
   const sectionTitle: Record<Section, string> = {
-    alerts: "Alerts · critical cases",
     overview: view === "all" ? "All bosses" : `My bosses · ${me}`,
     tracker: "Trackers · live analytics",
     chats: "Chats · grouped by boss",
@@ -242,7 +241,7 @@ function Dashboard() {
           scope={scope}
           setScope={setScope}
           alerts={alerts}
-          onAlertsClick={() => setSection("alerts")}
+          onAlertsClick={() => setSection("overview")}
         />
 
         <FilterBar
@@ -267,9 +266,7 @@ function Dashboard() {
             subtitle={
               section === "chats"
                 ? `${interviewFiltered.flatMap((b) => b.candidateChats).length} chats across ${interviewFiltered.length} bosses`
-                : section === "alerts"
-                ? `${alertBosses.length} bosses need attention`
-                : `${interviewFiltered.length} bosses in scope`
+                : `${interviewFiltered.length} bosses in scope · ${alertBosses.length} need attention`
             }
           />
 
@@ -277,9 +274,6 @@ function Dashboard() {
             <InterviewChannelTabs value={interviewChannel} onChange={setInterviewChannel} bosses={filtered} />
           )}
 
-          {section === "alerts" && (
-            <AlertsPanel bosses={filtered} onOpen={setSelected} />
-          )}
           {section === "overview" && (
             <OverviewZones bosses={interviewFiltered} onOpen={setSelected} />
           )}
