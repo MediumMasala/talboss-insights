@@ -48,6 +48,122 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
 };
 
 type Section = "alerts" | "overview" | "tracker" | "chats";
+type Severity = "critical" | "warning" | "nudge" | "healthy";
+
+/* ---------- Health + severity helpers ---------- */
+function parseDays(s: string): number {
+  if (!s) return 0;
+  const lower = s.toLowerCase();
+  if (lower.includes("just now") || lower.includes("min")) return 0;
+  if (/^\d+m\b/.test(lower)) return 0;
+  if (/^\d+h\b/.test(lower)) {
+    const h = parseInt(lower);
+    return h / 24;
+  }
+  if (/^\d+d\b/.test(lower)) return parseInt(lower);
+  if (lower.includes("yesterday") || lower.includes("yest")) return 1;
+  if (lower.includes("week") || lower.includes("1w")) return 7;
+  if (lower.includes("mon") || lower.includes("fri")) return 3;
+  return 0.5;
+}
+
+function healthScore(b: Boss): number {
+  const respRate = b.swipedToDM ? b.dmAccepted / b.swipedToDM : 0.5;
+  const days = parseDays(b.lastActivity);
+  const activity = Math.max(0, 1 - days / 7);
+  const pipe = STAGES.indexOf(b.stage) / (STAGES.length - 1);
+  const sent = b.sentiment === "happy" ? 1 : b.sentiment === "neutral" ? 0.55 : 0.1;
+  const status = b.status === "active" ? 1 : b.status === "idle" ? 0.5 : b.status === "no_reply" ? 0.15 : 0.4;
+  const score = respRate * 0.22 + activity * 0.22 + pipe * 0.16 + sent * 0.2 + status * 0.2;
+  return Math.max(0, Math.min(100, Math.round(score * 100)));
+}
+
+function healthTone(score: number): { cls: string; bg: string; label: string } {
+  if (score >= 70) return { cls: "text-flow", bg: "bg-flow/10 border-flow/30", label: "Healthy" };
+  if (score >= 40) return { cls: "text-warn", bg: "bg-warn/10 border-warn/30", label: "Watch" };
+  return { cls: "text-destructive", bg: "bg-destructive/10 border-destructive/30", label: "Critical" };
+}
+
+function severityOf(b: Boss): Severity {
+  const days = parseDays(b.lastActivity);
+  if (b.alert) {
+    if (/ghost|lost|withdrew|fail|down|broke/i.test(b.alert)) return "critical";
+    if (b.sentiment === "unhappy" || days >= 2) return "critical";
+    return "warning";
+  }
+  if (b.sentiment === "unhappy" && days >= 1) return "critical";
+  if (b.status === "no_reply" && days >= 2) return "critical";
+  if (b.status === "no_reply" || days >= 3) return "warning";
+  if (b.status === "idle" && days >= 1) return "nudge";
+  if (days >= 5) return "nudge";
+  return "healthy";
+}
+
+function bossOneLine(b: Boss): string {
+  const days = parseDays(b.lastActivity);
+  const lastTxt = days >= 1 ? `${Math.round(days)}d ago` : b.lastActivity;
+  const total = b.chatsOpen + b.chatsClosed;
+  const progressing = b.chatsOpen;
+  return `${b.stage} · ${progressing} of ${total || progressing} progressing · last reply ${lastTxt}`;
+}
+
+function ctaForBoss(b: Boss): { label: string; tone: "primary" | "warn" | "destructive" } {
+  if (b.status === "no_reply" || (b.alert && /no reply|ghost/i.test(b.alert))) {
+    return { label: "Send nudge", tone: "destructive" };
+  }
+  if (b.sentiment === "unhappy") return { label: "Call boss", tone: "warn" };
+  if (parseDays(b.lastActivity) >= 5) return { label: "Reassign", tone: "warn" };
+  return { label: "Send nudge", tone: "primary" };
+}
+
+/* ---------- Sparkline ---------- */
+function seedSeries(seed: string, n = 14, base = 50): number[] {
+  let s = 0;
+  for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) | 0;
+  const out: number[] = [];
+  let v = base;
+  for (let i = 0; i < n; i++) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    v = Math.max(2, Math.min(100, v + ((s % 21) - 10)));
+    out.push(v);
+  }
+  return out;
+}
+
+function Sparkline({ data, tone }: { data: number[]; tone?: "flow" | "warn" }) {
+  const w = 80, h = 22;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data);
+  const span = Math.max(1, max - min);
+  const pts = data
+    .map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / span) * h}`)
+    .join(" ");
+  const stroke = tone === "warn" ? "var(--color-warn)" : tone === "flow" ? "var(--color-flow)" : "var(--color-primary)";
+  const last = data[data.length - 1];
+  const first = data[0];
+  const up = last >= first;
+  return (
+    <div className="flex items-center gap-1.5">
+      <svg width={w} height={h} className="overflow-visible">
+        <polyline points={pts} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className={`text-[9px] font-mono font-bold ${up ? "text-flow" : "text-warn"}`}>
+        {up ? "▲" : "▼"} {Math.abs(last - first)}
+      </span>
+    </div>
+  );
+}
+
+/* ---------- 5-dot chat journey ---------- */
+const CHAT_JOURNEY = ["Matched", "Talking", "Interview", "Offer", "Closed"] as const;
+function chatJourneyIndex(c: CandidateChat): number {
+  if (c.status === "closed") return 4;
+  const msgs = c.messages?.length ?? 0;
+  if (msgs >= 8) return 3;
+  if (msgs >= 5) return 2;
+  if (msgs >= 2) return 1;
+  return 0;
+}
 
 function Dashboard() {
   const [section, setSection] = useState<Section>("overview");
@@ -143,6 +259,8 @@ function Dashboard() {
           count={interviewFiltered.length}
         />
 
+        <ActivityTicker bosses={BOSSES} />
+
         <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
           <SectionHeader
             title={sectionTitle[section]}
@@ -160,10 +278,10 @@ function Dashboard() {
           )}
 
           {section === "alerts" && (
-            <BossGrid bosses={alertBosses} onOpen={setSelected} emptyText="No active alerts. All boss conversations are healthy." />
+            <AlertsPanel bosses={filtered} onOpen={setSelected} />
           )}
           {section === "overview" && (
-            <BossGrid bosses={interviewFiltered} onOpen={setSelected} />
+            <OverviewZones bosses={interviewFiltered} onOpen={setSelected} />
           )}
           {section === "tracker" && (
             <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} />
@@ -357,22 +475,68 @@ function TrackerPanel({
     b.candidateChats.some((c) => c.closeReason && NEGATIVE_CLOSE.includes(c.closeReason)),
   );
 
+  // What changed today (synthetic from data + seeded series)
+  const changes = [
+    `${active.length} bosses active in the last hour (▲ ${Math.max(1, Math.round(active.length * 0.3))} vs yesterday)`,
+    `${noReply.length} bosses now in no-reply (▲ ${Math.max(0, noReply.length - 1)} since yesterday)`,
+    `${positiveClosed.length} positive closes this week · ${negativeClosed.length} negative`,
+    `${interviewApp} interviews on app · ${interviewExt} external (${pct(interviewApp, interviewApp + interviewExt || 1)}% on-app)`,
+    `Avg intent ${avgIntent}% across ${bosses.length} bosses · ${verified.length} verified`,
+  ];
+
+  // Stage movements (synthetic, deterministic)
+  const moves: { from: Stage; to: Stage; n: number }[] = [];
+  for (let i = 0; i < STAGES.length - 1; i++) {
+    const seed = seedSeries(STAGES[i] + STAGES[i + 1], 1, 3)[0];
+    const n = Math.max(1, seed % 4);
+    moves.push({ from: STAGES[i], to: STAGES[i + 1], n });
+  }
+
   return (
     <div className="space-y-5">
-      {/* Headline KPIs */}
+      {/* What changed today */}
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+        <TrackerLabel>What changed today</TrackerLabel>
+        <ul className="space-y-1.5">
+          {changes.map((c, i) => (
+            <li key={i} className="flex items-start gap-2 text-[12px] text-foreground/90">
+              <span className="size-1 rounded-full bg-primary mt-1.5 shrink-0" />
+              <span>{c}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      {/* Headline KPIs with sparklines */}
       <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-        <KPI label="Bosses" value={bosses.length} />
-        <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}% of total`} />
-        <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} />
-        <KPI label="Open roles" value={totalRoles} />
-        <KPI label="Open chats" value={totalOpenChats} />
-        <KPI label="Closed chats" value={totalClosedChats} />
-        <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% hire rate`} />
-        <KPI label="Not hired" value={totalNotHired} tone="warn" />
-        <KPI label="Active now" value={active.length} tone="flow" />
-        <KPI label="Idle" value={idle.length} />
-        <KPI label="No reply" value={noReply.length} tone="warn" />
-        <KPI label="Avg intent" value={`${avgIntent}%`} />
+        <KPI label="Bosses" value={bosses.length} series={seedSeries("bosses", 14, bosses.length)} />
+        <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}% of total`} series={seedSeries("verified", 14, verified.length * 5)} tone="flow" />
+        <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} series={seedSeries("onboarded", 14, onboarded.length * 5)} />
+        <KPI label="Open roles" value={totalRoles} series={seedSeries("openroles", 14, totalRoles * 4)} />
+        <KPI label="Open chats" value={totalOpenChats} series={seedSeries("openchats", 14, totalOpenChats * 3)} />
+        <KPI label="Closed chats" value={totalClosedChats} series={seedSeries("closedchats", 14, totalClosedChats * 3)} />
+        <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% hire rate`} series={seedSeries("hired", 14, totalHired * 8)} />
+        <KPI label="Not hired" value={totalNotHired} tone="warn" series={seedSeries("nothired", 14, totalNotHired * 6)} />
+        <KPI label="Active now" value={active.length} tone="flow" series={seedSeries("active", 14, active.length * 6)} />
+        <KPI label="Idle" value={idle.length} series={seedSeries("idle", 14, idle.length * 6)} />
+        <KPI label="No reply" value={noReply.length} tone="warn" series={seedSeries("noreply", 14, noReply.length * 6)} />
+        <KPI label="Avg intent" value={`${avgIntent}%`} series={seedSeries("intent", 14, avgIntent)} />
+      </div>
+
+      {/* Stage movements */}
+      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
+        <TrackerLabel>Stage movement · this week</TrackerLabel>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          {moves.map((m) => (
+            <div key={`${m.from}-${m.to}`} className="flex items-center gap-2 text-[12px] p-2 rounded-md bg-surface border border-border">
+              <span className="font-mono font-bold text-primary">{m.n}</span>
+              <span className="text-muted-foreground">moved</span>
+              <span className="font-semibold truncate">{m.from}</span>
+              <span className="text-muted-foreground">→</span>
+              <span className="font-semibold truncate">{m.to}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Funnel + sentiment */}
@@ -518,12 +682,15 @@ function ChannelBar({ label, value, total, tone }: { label: string; value: numbe
 }
 
 
-function KPI({ label, value, sub, tone }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn" }) {
+function KPI({ label, value, sub, tone, series }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn"; series?: number[] }) {
   const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
   return (
     <div className="bg-background border border-border rounded-lg px-3 py-2">
       <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
-      <div className={`text-base font-mono font-bold ${cls}`}>{value}</div>
+      <div className="flex items-end justify-between gap-2">
+        <div className={`text-base font-mono font-bold ${cls}`}>{value}</div>
+        {series && <Sparkline data={series} tone={tone} />}
+      </div>
       {sub && <div className="text-[9px] text-muted-foreground font-mono">{sub}</div>}
     </div>
   );
@@ -1026,83 +1193,266 @@ function EmptyHint({ text }: { text: string }) {
   );
 }
 
-/* ---------- Boss Grid + Card ---------- */
-function BossGrid({ bosses, onOpen, emptyText }: { bosses: Boss[]; onOpen: (b: Boss) => void; emptyText?: string }) {
-  if (bosses.length === 0) return <EmptyHint text={emptyText ?? "No bosses match the current filters."} />;
+/* ---------- Activity Ticker ---------- */
+function ActivityTicker({ bosses }: { bosses: Boss[] }) {
+  const events = useMemo(() => {
+    const evs: { text: string; time: string; ts: number; tone?: "flow" | "warn" }[] = [];
+    bosses.forEach((b) => {
+      const days = parseDays(b.lastActivity);
+      if (days < 1) {
+        evs.push({ text: `${b.name} · ${b.status === "active" ? "replied" : "active"}`, time: b.lastActivity, ts: Date.now() - days * 86400000, tone: "flow" });
+      }
+      b.candidateChats.slice(0, 1).forEach((c) => {
+        evs.push({
+          text: `${c.candidateName} · ${c.status === "closed" ? c.closeReason ?? "closed" : "messaged"}`,
+          time: c.lastTime,
+          ts: c.lastTs,
+          tone: c.chatStatus === "no_reply" ? "warn" : undefined,
+        });
+      });
+    });
+    return evs.sort((a, b) => b.ts - a.ts).slice(0, 12);
+  }, [bosses]);
+
+  const [idx, setIdx] = useState(0);
+  const visible = 5;
+  // rotate
+  useMemo(() => {
+    const id = typeof window !== "undefined" ? window.setInterval(() => setIdx((i) => (i + 1) % Math.max(1, events.length)), 3500) : null;
+    return () => { if (id) window.clearInterval(id); };
+  }, [events.length]);
+
+  const view = events.length ? Array.from({ length: visible }, (_, i) => events[(idx + i) % events.length]) : [];
+
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-      {bosses.map((b) => (
-        <BossCard key={b.id} boss={b} onOpen={onOpen} />
-      ))}
+    <div className="px-6 py-1.5 border-b border-border bg-surface/30 flex items-center gap-3 overflow-hidden">
+      <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-widest text-flow shrink-0">
+        <span className="size-1.5 rounded-full bg-flow pulse-dot" />
+        Live
+      </span>
+      <div className="flex items-center gap-4 overflow-hidden flex-1">
+        {view.map((e, i) => (
+          <div key={i} className={`flex items-center gap-1.5 text-[11px] whitespace-nowrap animate-fade-in ${i === 0 ? "font-semibold text-foreground" : "text-muted-foreground"}`}>
+            <span className={`size-1 rounded-full ${e.tone === "warn" ? "bg-warn" : e.tone === "flow" ? "bg-flow" : "bg-primary"}`} />
+            <span className="truncate max-w-[260px]">{e.text}</span>
+            <span className="font-mono opacity-60">· {e.time}</span>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
 
-function BossCard({ boss, onOpen }: { boss: Boss; onOpen: (b: Boss) => void }) {
-  const s = statusMeta[boss.status];
-  const owner = OWNERS.find((o) => o.initials === boss.ownerInitials);
-  const isAlert = !!boss.alert;
+/* ---------- Severity-tiered Alerts ---------- */
+function AlertsPanel({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) => void }) {
+  const tagged = bosses.map((b) => ({ b, sev: severityOf(b) }));
+  const critical = tagged.filter((t) => t.sev === "critical");
+  const warning = tagged.filter((t) => t.sev === "warning");
+  const nudge = tagged.filter((t) => t.sev === "nudge");
+
+  if (critical.length + warning.length + nudge.length === 0)
+    return <EmptyHint text="No active alerts. All boss conversations are healthy." />;
+
   return (
-    <button
-      onClick={() => onOpen(boss)}
-      className={`text-left bg-surface border rounded-2xl p-5 transition-all hover:border-primary/40 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-primary/5 animate-fade-in ${
-        isAlert ? "border-warn/30" : "border-border"
-      }`}
-    >
-      <div className="flex justify-between items-start mb-4">
-        <div className="flex gap-3 min-w-0">
-          <div className="size-11 rounded-xl bg-surface-elevated border border-border flex items-center justify-center font-bold text-sm shrink-0">
-            {initials(boss.name)}
+    <div className="space-y-5">
+      {critical.length > 0 && (
+        <div>
+          <ZoneHeader tone="critical" label="Critical" count={critical.length} hint="Ghosted, lost hire, unhappy + stalled" />
+          <div className="space-y-2">
+            {critical.map(({ b }) => <AlertRow key={b.id} boss={b} sev="critical" onOpen={onOpen} />)}
           </div>
-          <div className="min-w-0">
-            <h3 className="font-semibold text-foreground leading-tight truncate">{boss.name}</h3>
-            <p className="text-xs text-muted-foreground truncate">
-              {boss.company} · {boss.role}
-            </p>
-            <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{boss.id}</p>
-          </div>
-        </div>
-        <div className="flex flex-col items-end gap-1 shrink-0">
-          <span className={`size-2.5 rounded-full ${s.dot} ${boss.status === "active" ? "pulse-dot" : ""}`} />
-          <span className={`text-[10px] font-bold uppercase tracking-wider ${s.text}`}>{s.label}</span>
-        </div>
-      </div>
-
-      <div className="flex flex-wrap gap-1 mb-4">
-        <Tag>{boss.stage}</Tag>
-        {boss.verified ? <Tag>Verified</Tag> : <Tag muted>Unverified</Tag>}
-        <Tag muted>{boss.location}</Tag>
-      </div>
-
-      <div className="grid grid-cols-4 gap-2 py-3 border-y border-border/60">
-        <Stat label="Roles" value={boss.rolesOpen} accent />
-        <Stat label="Open" value={boss.chatsOpen} />
-        <Stat label="Hired" value={boss.hired} />
-        <Stat label="Not" value={boss.notHired} />
-      </div>
-
-      <div className="mt-4 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <span
-            title={owner?.name}
-            className="size-6 rounded-full bg-primary/15 text-primary flex items-center justify-center text-[10px] font-bold border border-primary/20"
-          >
-            {boss.ownerInitials}
-          </span>
-          <span className="text-[11px] text-muted-foreground font-mono">{boss.lastActivity}</span>
-        </div>
-        <span className={`text-[10px] font-bold uppercase tracking-widest ${sentimentMeta[boss.sentiment].cls}`}>
-          {sentimentMeta[boss.sentiment].label}
-        </span>
-      </div>
-
-      {isAlert && (
-        <div className="mt-3 p-2 rounded-md bg-warn/5 border border-warn/20 text-[11px] text-warn flex items-start gap-2">
-          <span className="size-1.5 rounded-full bg-warn mt-1.5 shrink-0" />
-          <span>{boss.alert}</span>
         </div>
       )}
-    </button>
+      {warning.length > 0 && (
+        <div>
+          <ZoneHeader tone="warning" label="Warning" count={warning.length} hint="No reply 3d, stalled" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+            {warning.map(({ b }) => <AlertRow key={b.id} boss={b} sev="warning" onOpen={onOpen} />)}
+          </div>
+        </div>
+      )}
+      {nudge.length > 0 && (
+        <div>
+          <ZoneHeader tone="nudge" label="Nudge" count={nudge.length} hint="Hasn't logged in 5d" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+            {nudge.map(({ b }) => <AlertRow key={b.id} boss={b} sev="nudge" onOpen={onOpen} />)}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ZoneHeader({ tone, label, count, hint }: { tone: "critical" | "warning" | "nudge" | "healthy"; label: string; count: number; hint?: string }) {
+  const map = {
+    critical: { dot: "bg-destructive", txt: "text-destructive" },
+    warning: { dot: "bg-warn", txt: "text-warn" },
+    nudge: { dot: "bg-yellow-500", txt: "text-yellow-600" },
+    healthy: { dot: "bg-flow", txt: "text-flow" },
+  } as const;
+  const t = map[tone];
+  return (
+    <div className="flex items-center gap-2 mb-2">
+      <span className={`size-2 rounded-full ${t.dot}`} />
+      <span className={`text-[11px] font-bold uppercase tracking-widest ${t.txt}`}>{label} · {count}</span>
+      {hint && <span className="text-[10px] text-muted-foreground">· {hint}</span>}
+    </div>
+  );
+}
+
+function AlertRow({ boss, sev, onOpen }: { boss: Boss; sev: Severity; onOpen: (b: Boss) => void }) {
+  const cta = ctaForBoss(boss);
+  const toneBg =
+    sev === "critical" ? "border-destructive/30 bg-destructive/5"
+      : sev === "warning" ? "border-warn/30 bg-warn/5"
+      : "border-yellow-500/30 bg-yellow-500/5";
+  return (
+    <div className={`flex items-center gap-3 p-3 rounded-xl border ${toneBg}`}>
+      <button onClick={() => onOpen(boss)} className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(boss.name)}
+      </button>
+      <button onClick={() => onOpen(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">{boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span></div>
+        <div className="text-[11px] text-muted-foreground truncate">{boss.alert ?? bossOneLine(boss)}</div>
+      </button>
+      {sev !== "nudge" && (
+        <button
+          className={`text-[11px] font-bold px-3 py-1.5 rounded-md shrink-0 ${
+            cta.tone === "destructive" ? "bg-destructive text-destructive-foreground"
+              : cta.tone === "warn" ? "bg-warn text-white"
+              : "bg-primary text-primary-foreground"
+          }`}
+        >
+          {cta.label}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ---------- Overview zones ---------- */
+function OverviewZones({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) => void }) {
+  const sorted = [...bosses].sort((a, b) => healthScore(a) - healthScore(b));
+  const tagged = sorted.map((b) => ({ b, sev: severityOf(b), score: healthScore(b) }));
+  const critical = tagged.filter((t) => t.sev === "critical");
+  const watch = tagged.filter((t) => t.sev === "warning" || t.sev === "nudge");
+  const healthy = tagged.filter((t) => t.sev === "healthy");
+  const [healthyOpen, setHealthyOpen] = useState(false);
+
+  if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
+
+  return (
+    <div className="space-y-6">
+      <section>
+        <ZoneHeader tone="critical" label="Needs you now" count={critical.length} hint="Critical issues — act today" />
+        {critical.length === 0 ? (
+          <div className="text-[11px] text-muted-foreground italic">Nothing critical. 🎉</div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+            {critical.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="critical" onOpen={onOpen} />)}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <ZoneHeader tone="warning" label="Watch" count={watch.length} hint="Concerning but not critical" />
+        {watch.length === 0 ? (
+          <div className="text-[11px] text-muted-foreground italic">Nothing to watch.</div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {watch.slice(0, 6).map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="warning" onOpen={onOpen} compact />)}
+          </div>
+        )}
+      </section>
+
+      <section>
+        <button
+          onClick={() => setHealthyOpen((o) => !o)}
+          className="w-full flex items-center justify-between p-3 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span className="size-2 rounded-full bg-flow" />
+            <span className="text-sm font-semibold text-flow">{healthy.length} bosses healthy. All on track.</span>
+          </div>
+          <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
+        </button>
+        {healthyOpen && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+            {healthy.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="healthy" onOpen={onOpen} compact />)}
+          </div>
+        )}
+      </section>
+    </div>
+  );
+}
+
+/* ---------- Boss card (slim) ---------- */
+function BossCard({
+  boss,
+  score,
+  sev,
+  onOpen,
+  compact,
+}: {
+  boss: Boss;
+  score?: number;
+  sev?: Severity;
+  onOpen: (b: Boss) => void;
+  compact?: boolean;
+}) {
+  const s = statusMeta[boss.status];
+  const sc = score ?? healthScore(boss);
+  const ht = healthTone(sc);
+  const cta = ctaForBoss(boss);
+  const borderCls =
+    sev === "critical" ? "border-destructive/40"
+      : sev === "warning" ? "border-warn/30"
+      : sev === "healthy" ? "border-border"
+      : "border-border";
+  return (
+    <div className={`bg-surface border rounded-2xl p-4 transition-all hover:-translate-y-0.5 hover:shadow-md animate-fade-in ${borderCls}`}>
+      <button onClick={() => onOpen(boss)} className="w-full text-left">
+        <div className="flex items-start gap-3">
+          <div className="size-10 rounded-xl bg-surface-elevated border border-border flex items-center justify-center font-bold text-sm shrink-0">
+            {initials(boss.name)}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center justify-between gap-2">
+              <h3 className="font-semibold text-foreground leading-tight truncate">{boss.name}</h3>
+              <div className={`flex items-center gap-1 px-2 py-0.5 rounded-md border ${ht.bg} shrink-0`}>
+                <span className={`text-xs font-mono font-bold ${ht.cls}`}>{sc}</span>
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground truncate">{boss.company} · {boss.role}</p>
+          </div>
+        </div>
+
+        <p className="text-[12px] text-foreground/80 mt-3 leading-snug">
+          {bossOneLine(boss)}
+        </p>
+
+        <div className="flex items-center justify-between mt-3 text-[10px]">
+          <div className="flex items-center gap-1.5">
+            <span className={`size-1.5 rounded-full ${s.dot}`} />
+            <span className={`font-bold uppercase tracking-wider ${s.text}`}>{s.label}</span>
+            <span className="text-muted-foreground ml-2">{boss.ownerInitials}</span>
+          </div>
+          <span className="text-muted-foreground font-mono">{boss.lastActivity}</span>
+        </div>
+      </button>
+
+      {!compact && sev === "critical" && (
+        <button
+          className={`mt-3 w-full text-xs font-bold px-3 py-2 rounded-md ${
+            cta.tone === "destructive" ? "bg-destructive text-destructive-foreground"
+              : cta.tone === "warn" ? "bg-warn text-white"
+              : "bg-primary text-primary-foreground"
+          }`}
+        >
+          {cta.label}
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -1120,16 +1470,6 @@ function Tag({ children, muted }: { children: React.ReactNode; muted?: boolean }
   );
 }
 
-function Stat({ label, value, accent }: { label: string; value: number | string; accent?: boolean }) {
-  return (
-    <div>
-      <p className="text-[10px] text-muted-foreground uppercase font-bold tracking-tight">{label}</p>
-      <p className={`text-base font-mono font-bold ${accent ? "text-primary" : "text-foreground"}`}>
-        {value}
-      </p>
-    </div>
-  );
-}
 
 /* ---------- Chat stream (chat-wise, recency-sorted) ---------- */
 function ChatStream({
@@ -1343,28 +1683,12 @@ function ChatDetail({
       </div>
 
       <div className="p-5 space-y-5">
+        {/* 5-dot journey */}
+        <ChatJourney chat={chat} />
+
         {/* Two profile strips: candidate + boss */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          <div className="p-3 rounded-xl bg-surface border border-border">
-            <div className="flex items-center gap-3 mb-3">
-              <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold border border-primary/20">
-                {initials(chat.candidateName)}
-              </div>
-              <div className="min-w-0">
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Candidate</div>
-                <div className="font-semibold text-sm truncate">{chat.candidateName}</div>
-                <div className="text-[11px] text-muted-foreground truncate">{chat.candidateRole}</div>
-              </div>
-            </div>
-            {chat.candidateProfile && (
-              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                <ProfRow k="Exp" v={chat.candidateProfile.experience} />
-                <ProfRow k="Loc" v={chat.candidateProfile.location} />
-                <ProfRow k="Now" v={chat.candidateProfile.currentCompany} />
-                <ProfRow k="Expects" v={chat.candidateProfile.expectedComp} />
-              </div>
-            )}
-          </div>
+          <CandidateProfileCard chat={chat} />
 
           <button
             onClick={() => onOpenBoss(boss)}
@@ -1445,6 +1769,79 @@ function ProfRow({ k, v, mono }: { k: string; v: string; mono?: boolean }) {
     <div className="flex items-center gap-1.5 min-w-0">
       <span className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold shrink-0 w-12">{k}</span>
       <span className={`text-[11px] truncate ${mono ? "font-mono" : ""}`}>{v}</span>
+    </div>
+  );
+}
+
+/* ---------- Chat journey 5-dot ---------- */
+function ChatJourney({ chat }: { chat: CandidateChat }) {
+  const idx = chatJourneyIndex(chat);
+  return (
+    <div className="p-3 rounded-xl bg-surface border border-border">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-[10px] uppercase tracking-widest font-bold text-muted-foreground">Journey</span>
+        <span className="text-[10px] font-mono text-muted-foreground">{CHAT_JOURNEY[idx]}</span>
+      </div>
+      <div className="flex items-center gap-1">
+        {CHAT_JOURNEY.map((s, i) => {
+          const done = i <= idx;
+          return (
+            <div key={s} className="flex items-center gap-1 flex-1 last:flex-none">
+              <div className="flex flex-col items-center gap-1">
+                <span className={`size-3 rounded-full border-2 ${done ? "bg-primary border-primary" : "bg-transparent border-border"}`} />
+                <span className={`text-[9px] font-semibold ${done ? "text-foreground" : "text-muted-foreground"}`}>{s}</span>
+              </div>
+              {i < CHAT_JOURNEY.length - 1 && (
+                <div className={`flex-1 h-0.5 ${i < idx ? "bg-primary" : "bg-border"}`} />
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Candidate profile card (richer like boss) ---------- */
+function CandidateProfileCard({ chat }: { chat: CandidateChat }) {
+  const [open, setOpen] = useState(false);
+  const p = chat.candidateProfile;
+  return (
+    <div className="p-3 rounded-xl bg-surface border border-border">
+      <button onClick={() => setOpen((o) => !o)} className="w-full flex items-center gap-3 text-left">
+        <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold border border-primary/20">
+          {initials(chat.candidateName)}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Candidate · click for more</div>
+          <div className="font-semibold text-sm truncate">{chat.candidateName}</div>
+          <div className="text-[11px] text-muted-foreground truncate">{chat.candidateRole} · for {chat.forRole}</div>
+        </div>
+        <span className={`text-[10px] text-muted-foreground transition-transform ${open ? "rotate-180" : ""}`}>▾</span>
+      </button>
+      {p && (
+        <div className="grid grid-cols-2 gap-1.5 text-[11px] mt-3">
+          <ProfRow k="Exp" v={p.experience} />
+          <ProfRow k="Loc" v={p.location} />
+          <ProfRow k="Now" v={p.currentCompany} />
+          <ProfRow k="Expects" v={p.expectedComp} />
+        </div>
+      )}
+      {open && p && (
+        <div className="mt-3 pt-3 border-t border-border space-y-2">
+          <div className="grid grid-cols-1 gap-1.5 text-[11px]">
+            <ProfRow k="Email" v={p.email} mono />
+            <ProfRow k="Phone" v={p.phone} mono />
+            <ProfRow k="Role" v={chat.forRole} />
+            <ProfRow k="Status" v={chat.status === "closed" ? (chat.closeReason ?? "Closed") : statusMeta[chat.chatStatus].label} />
+            <ProfRow k="Channel" v={chat.interviewChannel === "app" ? "TalBoss app" : chat.interviewChannel === "external" ? "External (Meet/Zoom)" : "—"} />
+          </div>
+          <div className="flex gap-1.5 pt-1">
+            <button className="flex-1 text-[11px] font-bold px-2 py-1.5 rounded bg-primary text-primary-foreground">Message</button>
+            <button className="flex-1 text-[11px] font-bold px-2 py-1.5 rounded bg-surface-elevated border border-border">Schedule</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
