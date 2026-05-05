@@ -159,11 +159,9 @@ const CHAT_JOURNEY = ["Matched", "Talking", "Interview", "Offer", "Closed"] as c
 function chatJourneyIndex(c: CandidateChat): number {
   if (c.status === "closed") return 4;
   const msgs = c.messages?.length ?? 0;
-  const closed = c.status === "closed";
-  if (closed && c.closeReason && POSITIVE_CLOSE.includes(c.closeReason)) return 4;
-  if (msgs >= 8) return 3; // offer-ish
-  if (msgs >= 5) return 2; // interview
-  if (msgs >= 2) return 1; // talking
+  if (msgs >= 8) return 3;
+  if (msgs >= 5) return 2;
+  if (msgs >= 2) return 1;
   return 0;
 }
 
