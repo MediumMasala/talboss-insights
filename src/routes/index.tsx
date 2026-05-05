@@ -492,176 +492,219 @@ function TrackerPanel({
     moves.push({ from: STAGES[i], to: STAGES[i + 1], n });
   }
 
+  type TrackerTab = "today" | "pipeline" | "outcomes" | "team";
+  const [tab, setTab] = useState<TrackerTab>("today");
+
+  const tabs: { k: TrackerTab; label: string; hint: string }[] = [
+    { k: "today", label: "Today", hint: "What changed in the last 24h" },
+    { k: "pipeline", label: "Pipeline", hint: "Stages, funnel, movement" },
+    { k: "outcomes", label: "Outcomes", hint: "Hires, closes, conversion" },
+    { k: "team", label: "Team", hint: "Owner load + channels" },
+  ];
+
   return (
-    <div className="space-y-5">
-      {/* What changed today */}
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-        <TrackerLabel>What changed today</TrackerLabel>
-        <ul className="space-y-1.5">
-          {changes.map((c, i) => (
-            <li key={i} className="flex items-start gap-2 text-[12px] text-foreground/90">
-              <span className="size-1 rounded-full bg-primary mt-1.5 shrink-0" />
-              <span>{c}</span>
-            </li>
-          ))}
-        </ul>
+    <div className="space-y-4">
+      {/* Tab strip */}
+      <div className="flex flex-wrap items-center gap-1 p-1 bg-surface border border-border rounded-lg w-fit">
+        {tabs.map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k)}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              tab === t.k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+        <span className="ml-2 text-[11px] text-muted-foreground hidden md:inline">
+          · {tabs.find((x) => x.k === tab)?.hint}
+        </span>
       </div>
 
-      {/* Headline KPIs with sparklines */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-        <KPI label="Bosses" value={bosses.length} series={seedSeries("bosses", 14, bosses.length)} />
-        <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}% of total`} series={seedSeries("verified", 14, verified.length * 5)} tone="flow" />
-        <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} series={seedSeries("onboarded", 14, onboarded.length * 5)} />
-        <KPI label="Open roles" value={totalRoles} series={seedSeries("openroles", 14, totalRoles * 4)} />
-        <KPI label="Open chats" value={totalOpenChats} series={seedSeries("openchats", 14, totalOpenChats * 3)} />
-        <KPI label="Closed chats" value={totalClosedChats} series={seedSeries("closedchats", 14, totalClosedChats * 3)} />
-        <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% hire rate`} series={seedSeries("hired", 14, totalHired * 8)} />
-        <KPI label="Not hired" value={totalNotHired} tone="warn" series={seedSeries("nothired", 14, totalNotHired * 6)} />
-        <KPI label="Active now" value={active.length} tone="flow" series={seedSeries("active", 14, active.length * 6)} />
-        <KPI label="Idle" value={idle.length} series={seedSeries("idle", 14, idle.length * 6)} />
-        <KPI label="No reply" value={noReply.length} tone="warn" series={seedSeries("noreply", 14, noReply.length * 6)} />
-        <KPI label="Avg intent" value={`${avgIntent}%`} series={seedSeries("intent", 14, avgIntent)} />
-      </div>
+      {/* TODAY */}
+      {tab === "today" && (
+        <div className="space-y-4">
+          <SectionPanel title="What changed today" hint="5-bullet snapshot of day-over-day movement">
+            <ul className="space-y-1.5">
+              {changes.map((c, i) => (
+                <li key={i} className="flex items-start gap-2 text-[12px] text-foreground/90">
+                  <span className="size-1 rounded-full bg-primary mt-1.5 shrink-0" />
+                  <span>{c}</span>
+                </li>
+              ))}
+            </ul>
+          </SectionPanel>
 
-      {/* Stage movements */}
-      <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-        <TrackerLabel>Stage movement · this week</TrackerLabel>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-          {moves.map((m) => (
-            <div key={`${m.from}-${m.to}`} className="flex items-center gap-2 text-[12px] p-2 rounded-md bg-surface border border-border">
-              <span className="font-mono font-bold text-primary">{m.n}</span>
-              <span className="text-muted-foreground">moved</span>
-              <span className="font-semibold truncate">{m.from}</span>
-              <span className="text-muted-foreground">→</span>
-              <span className="font-semibold truncate">{m.to}</span>
+          <SectionPanel title="Headline metrics" hint="14-day trend per metric · click sparkline shows direction">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              <KPI label="Bosses" value={bosses.length} series={seedSeries("bosses", 14, bosses.length)} />
+              <KPI label="Active now" value={active.length} tone="flow" series={seedSeries("active", 14, active.length * 6)} />
+              <KPI label="No reply" value={noReply.length} tone="warn" series={seedSeries("noreply", 14, noReply.length * 6)} />
+              <KPI label="Avg intent" value={`${avgIntent}%`} series={seedSeries("intent", 14, avgIntent)} />
+              <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}%`} tone="flow" series={seedSeries("verified", 14, verified.length * 5)} />
+              <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} series={seedSeries("onboarded", 14, onboarded.length * 5)} />
+              <KPI label="Open chats" value={totalOpenChats} series={seedSeries("openchats", 14, totalOpenChats * 3)} />
+              <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% rate`} series={seedSeries("hired", 14, totalHired * 8)} />
             </div>
-          ))}
+          </SectionPanel>
         </div>
-      </div>
+      )}
 
-      {/* Funnel + sentiment */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl p-4 shadow-sm">
-          <div className="flex items-center justify-between mb-3">
-            <TrackerLabel>Pipeline funnel · by stage</TrackerLabel>
-            <span className="text-[10px] font-mono text-muted-foreground">{total} bosses</span>
-          </div>
-          <div className="space-y-1.5">
-            {byStage.map((s) => {
-              const p = Math.round((s.bosses.length / total) * 100);
-              const w = (s.bosses.length / maxStageCount) * 100;
-              return (
-                <button
-                  key={s.stage}
-                  onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
-                  className="w-full flex items-center gap-3 text-left group"
-                  disabled={s.bosses.length === 0}
-                >
-                  <span className="w-24 text-[11px] font-semibold text-foreground/80 shrink-0 truncate">{s.stage}</span>
-                  <div className="flex-1 h-6 bg-surface rounded-md overflow-hidden border border-border relative">
-                    <div className="h-full bg-primary/80 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
-                    <span className="absolute inset-0 flex items-center px-2 text-[11px] font-mono font-bold text-foreground">{s.bosses.length}</span>
-                  </div>
-                  <span className="w-12 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
-                </button>
-              );
-            })}
-          </div>
+      {/* PIPELINE */}
+      {tab === "pipeline" && (
+        <div className="space-y-4">
+          <SectionPanel title="Stage movement · this week" hint="Bosses that advanced from one stage to the next">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {moves.map((m) => (
+                <div key={`${m.from}-${m.to}`} className="flex items-center gap-2 text-[12px] p-2 rounded-md bg-surface border border-border">
+                  <span className="font-mono font-bold text-primary text-base">{m.n}</span>
+                  <span className="text-muted-foreground">moved</span>
+                  <span className="font-semibold truncate">{m.from}</span>
+                  <span className="text-muted-foreground">→</span>
+                  <span className="font-semibold truncate">{m.to}</span>
+                </div>
+              ))}
+            </div>
+          </SectionPanel>
+
+          <SectionPanel title="Pipeline funnel" hint={`Distribution across ${total} bosses · click a row to drill in`}>
+            <div className="space-y-1.5">
+              {byStage.map((s) => {
+                const p = Math.round((s.bosses.length / total) * 100);
+                const w = (s.bosses.length / maxStageCount) * 100;
+                return (
+                  <button
+                    key={s.stage}
+                    onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
+                    className="w-full flex items-center gap-3 text-left group"
+                    disabled={s.bosses.length === 0}
+                  >
+                    <span className="w-24 text-[11px] font-semibold text-foreground/80 shrink-0 truncate">{s.stage}</span>
+                    <div className="flex-1 h-6 bg-surface rounded-md overflow-hidden border border-border relative">
+                      <div className="h-full bg-primary/80 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
+                      <span className="absolute inset-0 flex items-center px-2 text-[11px] font-mono font-bold text-foreground">{s.bosses.length}</span>
+                    </div>
+                    <span className="w-12 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
+                  </button>
+                );
+              })}
+            </div>
+          </SectionPanel>
         </div>
+      )}
 
-        <div className="grid grid-cols-2 gap-2">
-          <MetricTile label="Happy" value={`${pct(happy.length, total)}%`} sub={`${happy.length} bosses`} tone="flow" onClick={() => onDrill({ title: "Happy bosses", bosses: happy })} />
-          <MetricTile label="Unhappy" value={`${pct(unhappy.length, total)}%`} sub={`${unhappy.length} bosses`} tone="warn" onClick={() => onDrill({ title: "Unhappy bosses", bosses: unhappy })} />
-          <MetricTile label="Neutral" value={`${pct(neutral.length, total)}%`} sub={`${neutral.length} bosses`} onClick={() => onDrill({ title: "Neutral bosses", bosses: neutral })} />
-          <MetricTile label="Active" value={`${active.length}`} sub={`${pct(active.length, total)}%`} tone="flow" onClick={() => onDrill({ title: "Active bosses", bosses: active })} />
-          <MetricTile label="Idle" value={`${idle.length}`} sub={`${pct(idle.length, total)}%`} onClick={() => onDrill({ title: "Idle bosses", bosses: idle })} />
-          <MetricTile label="No reply" value={`${noReply.length}`} sub={`${pct(noReply.length, total)}%`} tone="warn" onClick={() => onDrill({ title: "No-reply bosses", bosses: noReply })} />
-        </div>
-      </div>
-
-      {/* Conversion + interview channels */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-          <TrackerLabel>Swipe → DM conversion</TrackerLabel>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-mono font-bold text-foreground">{swipeToDM}%</span>
-            <span className="text-[11px] text-muted-foreground font-mono">{dms} / {swipes} swipes</span>
-          </div>
-          <div className="mt-2 h-2 bg-surface rounded-full overflow-hidden border border-border">
-            <div className="h-full bg-primary" style={{ width: `${swipeToDM}%` }} />
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-[10px]">
-            <div><span className="text-muted-foreground">DM accept rate</span><div className="font-mono font-bold text-sm text-foreground">{dmAcceptRate}%</div></div>
-            <div><span className="text-muted-foreground">Avg intent</span><div className="font-mono font-bold text-sm text-foreground">{avgIntent}%</div></div>
-          </div>
-        </div>
-
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-          <TrackerLabel>Interview channels</TrackerLabel>
-          <ChannelBar label="On TalBoss app" value={interviewApp} total={interviewApp + interviewExt || 1} tone="flow" />
-          <div className="h-2" />
-          <ChannelBar label="External (Meet · Zoom)" value={interviewExt} total={interviewApp + interviewExt || 1} />
-          <div className="text-[10px] text-muted-foreground mt-3">
-            Use the <span className="font-semibold text-foreground">Stage = Interview</span> filter to drill in.
-          </div>
-        </div>
-
-        <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="bg-card border border-border rounded-xl p-4 text-left hover:border-warn/40 shadow-sm transition-colors">
-          <TrackerLabel>Negative closes · reasons</TrackerLabel>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-mono font-bold text-warn">{negativeClosed.length}</span>
-            <span className="text-[11px] text-muted-foreground">across {bossesWithNegative.length} bosses</span>
-          </div>
-          <div className="mt-3 space-y-1">
-            {Object.entries(negByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
-              <div key={r} className="flex items-center gap-2 text-[11px]">
-                <span className="flex-1 truncate">{r}</span>
-                <span className="font-mono font-bold text-warn">{n}</span>
+      {/* OUTCOMES */}
+      {tab === "outcomes" && (
+        <div className="space-y-4">
+          <SectionPanel title="Conversion" hint="Top of funnel → committed conversation">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="p-3 rounded-lg bg-surface border border-border">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-1">Swipe → DM</div>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-2xl font-mono font-bold">{swipeToDM}%</span>
+                  <span className="text-[11px] text-muted-foreground font-mono">{dms} / {swipes}</span>
+                </div>
+                <div className="mt-2 h-2 bg-background rounded-full overflow-hidden border border-border">
+                  <div className="h-full bg-primary" style={{ width: `${swipeToDM}%` }} />
+                </div>
               </div>
-            ))}
-            {negativeClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
-          </div>
-        </button>
-      </div>
-
-      {/* Positive closes detail */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="bg-card border border-border rounded-xl p-4 text-left hover:border-flow/40 shadow-sm transition-colors">
-          <TrackerLabel>Positive closes · reasons</TrackerLabel>
-          <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-mono font-bold text-flow">{positiveClosed.length}</span>
-            <span className="text-[11px] text-muted-foreground">across {bossesWithPositive.length} bosses</span>
-          </div>
-          <div className="mt-3 space-y-1">
-            {Object.entries(posByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
-              <div key={r} className="flex items-center gap-2 text-[11px]">
-                <span className="flex-1 truncate">{r}</span>
-                <span className="font-mono font-bold text-flow">{n}</span>
+              <div className="p-3 rounded-lg bg-surface border border-border">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-1">DM accept</div>
+                <div className="text-2xl font-mono font-bold">{dmAcceptRate}%</div>
+                <div className="text-[11px] text-muted-foreground">Bosses who replied to a DM</div>
               </div>
-            ))}
-            {positiveClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
-          </div>
-        </button>
+              <div className="p-3 rounded-lg bg-surface border border-border">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-1">Hire rate</div>
+                <div className="text-2xl font-mono font-bold text-flow">{hireRate}%</div>
+                <div className="text-[11px] text-muted-foreground">{totalHired} hired · {totalNotHired} not</div>
+              </div>
+            </div>
+          </SectionPanel>
 
-        <div className="bg-card border border-border rounded-xl p-4 shadow-sm">
-          <TrackerLabel>Owner load</TrackerLabel>
-          <div className="space-y-1.5">
-            {OWNERS.map((o) => {
-              const owned = bosses.filter((b) => b.ownerInitials === o.initials);
-              const w = (owned.length / Math.max(1, bosses.length)) * 100;
-              return (
-                <button key={o.initials} onClick={() => onDrill({ title: `Owner · ${o.name}`, bosses: owned })} className="w-full text-left flex items-center gap-3">
-                  <span className="w-24 text-[11px] font-semibold truncate">{o.name.split(" ")[0]}</span>
-                  <div className="flex-1 h-5 bg-surface rounded-md overflow-hidden border border-border relative">
-                    <div className="h-full bg-primary/70" style={{ width: `${w}%` }} />
-                    <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold">{owned.length}</span>
-                  </div>
-                </button>
-              );
-            })}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <SectionPanel title="Positive closes" hint={`${positiveClosed.length} across ${bossesWithPositive.length} bosses`}>
+              <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="w-full text-left">
+                <div className="space-y-1">
+                  {Object.entries(posByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+                    <div key={r} className="flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface">
+                      <span className="flex-1 truncate">{r}</span>
+                      <span className="font-mono font-bold text-flow">{n}</span>
+                    </div>
+                  ))}
+                  {positiveClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None yet.</div>}
+                </div>
+              </button>
+            </SectionPanel>
+
+            <SectionPanel title="Negative closes" hint={`${negativeClosed.length} across ${bossesWithNegative.length} bosses`}>
+              <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="w-full text-left">
+                <div className="space-y-1">
+                  {Object.entries(negByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+                    <div key={r} className="flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface">
+                      <span className="flex-1 truncate">{r}</span>
+                      <span className="font-mono font-bold text-warn">{n}</span>
+                    </div>
+                  ))}
+                  {negativeClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
+                </div>
+              </button>
+            </SectionPanel>
           </div>
+
+          <SectionPanel title="Sentiment split" hint="Click a tile to filter the list">
+            <div className="grid grid-cols-3 gap-2">
+              <MetricTile label="Happy" value={`${pct(happy.length, total)}%`} sub={`${happy.length} bosses`} tone="flow" onClick={() => onDrill({ title: "Happy bosses", bosses: happy })} />
+              <MetricTile label="Neutral" value={`${pct(neutral.length, total)}%`} sub={`${neutral.length} bosses`} onClick={() => onDrill({ title: "Neutral bosses", bosses: neutral })} />
+              <MetricTile label="Unhappy" value={`${pct(unhappy.length, total)}%`} sub={`${unhappy.length} bosses`} tone="warn" onClick={() => onDrill({ title: "Unhappy bosses", bosses: unhappy })} />
+            </div>
+          </SectionPanel>
         </div>
+      )}
+
+      {/* TEAM */}
+      {tab === "team" && (
+        <div className="space-y-4">
+          <SectionPanel title="Owner load" hint="Bosses currently owned by each ops member">
+            <div className="space-y-1.5">
+              {OWNERS.map((o) => {
+                const owned = bosses.filter((b) => b.ownerInitials === o.initials);
+                const w = (owned.length / Math.max(1, bosses.length)) * 100;
+                return (
+                  <button key={o.initials} onClick={() => onDrill({ title: `Owner · ${o.name}`, bosses: owned })} className="w-full text-left flex items-center gap-3">
+                    <span className="w-32 text-[11px] font-semibold truncate">{o.name}</span>
+                    <div className="flex-1 h-5 bg-surface rounded-md overflow-hidden border border-border relative">
+                      <div className="h-full bg-primary/70" style={{ width: `${w}%` }} />
+                      <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold">{owned.length}</span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </SectionPanel>
+
+          <SectionPanel title="Interview channels" hint="Where interviews are happening">
+            <ChannelBar label="On TalBoss app" value={interviewApp} total={interviewApp + interviewExt || 1} tone="flow" />
+            <div className="h-2" />
+            <ChannelBar label="External (Meet · Zoom)" value={interviewExt} total={interviewApp + interviewExt || 1} />
+            <div className="text-[10px] text-muted-foreground mt-3">
+              Use the <span className="font-semibold text-foreground">Stage = Interview</span> filter to drill in.
+            </div>
+          </SectionPanel>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SectionPanel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-card border border-border rounded-xl shadow-sm">
+      <div className="px-4 pt-3 pb-2 border-b border-border/60">
+        <div className="text-[11px] font-bold uppercase tracking-widest text-foreground">{title}</div>
+        {hint && <div className="text-[10px] text-muted-foreground mt-0.5">{hint}</div>}
       </div>
+      <div className="p-4">{children}</div>
     </div>
   );
 }
@@ -1342,27 +1385,37 @@ function OverviewZones({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) =
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
 
   return (
-    <div className="space-y-6">
-      <section>
-        <ZoneHeader tone="critical" label="Needs you now" count={critical.length} hint="Critical issues — act today" />
-        {critical.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground italic">Nothing critical. 🎉</div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {critical.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="critical" onOpen={onOpen} />)}
-          </div>
-        )}
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-2">
+        <ZoneSummary tone="critical" label="Needs you now" count={critical.length} hint="Act today" />
+        <ZoneSummary tone="warning" label="Watch" count={watch.length} hint="Check this week" />
+        <ZoneSummary tone="healthy" label="Healthy" count={healthy.length} hint="On track" />
+      </div>
+
+      <section className="rounded-2xl border border-destructive/25 bg-destructive/[0.02] p-4">
+        <ZoneHeader tone="critical" label="Needs you now" count={critical.length} hint="Critical issues — one CTA per card" />
+        <div className="mt-3">
+          {critical.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground italic">Nothing critical right now. 🎉</div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {critical.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="critical" onOpen={onOpen} />)}
+            </div>
+          )}
+        </div>
       </section>
 
-      <section>
-        <ZoneHeader tone="warning" label="Watch" count={watch.length} hint="Concerning but not critical" />
-        {watch.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground italic">Nothing to watch.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {watch.slice(0, 6).map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="warning" onOpen={onOpen} compact />)}
-          </div>
-        )}
+      <section className="rounded-2xl border border-warn/25 bg-warn/[0.02] p-4">
+        <ZoneHeader tone="warning" label="Watch" count={watch.length} hint="Concerning but not critical · top 6 shown" />
+        <div className="mt-3">
+          {watch.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground italic">Nothing to watch.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {watch.slice(0, 6).map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="warning" onOpen={onOpen} compact />)}
+            </div>
+          )}
+        </div>
       </section>
 
       <section>
@@ -1382,6 +1435,27 @@ function OverviewZones({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) =
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function ZoneSummary({
+  tone, label, count, hint,
+}: { tone: "critical" | "warning" | "healthy"; label: string; count: number; hint: string }) {
+  const map = {
+    critical: { border: "border-destructive/30", bg: "bg-destructive/5", txt: "text-destructive", dot: "bg-destructive" },
+    warning: { border: "border-warn/30", bg: "bg-warn/5", txt: "text-warn", dot: "bg-warn" },
+    healthy: { border: "border-flow/30", bg: "bg-flow/5", txt: "text-flow", dot: "bg-flow" },
+  } as const;
+  const t = map[tone];
+  return (
+    <div className={`p-3 rounded-xl border ${t.border} ${t.bg}`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`size-1.5 rounded-full ${t.dot}`} />
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${t.txt}`}>{label}</span>
+      </div>
+      <div className={`text-2xl font-mono font-bold mt-1 ${t.txt}`}>{count}</div>
+      <div className="text-[10px] text-muted-foreground">{hint}</div>
     </div>
   );
 }
