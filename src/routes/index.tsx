@@ -48,6 +48,124 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
 };
 
 type Section = "alerts" | "overview" | "tracker" | "chats";
+type Severity = "critical" | "warning" | "nudge" | "healthy";
+
+/* ---------- Health + severity helpers ---------- */
+function parseDays(s: string): number {
+  if (!s) return 0;
+  const lower = s.toLowerCase();
+  if (lower.includes("just now") || lower.includes("min")) return 0;
+  if (/^\d+m\b/.test(lower)) return 0;
+  if (/^\d+h\b/.test(lower)) {
+    const h = parseInt(lower);
+    return h / 24;
+  }
+  if (/^\d+d\b/.test(lower)) return parseInt(lower);
+  if (lower.includes("yesterday") || lower.includes("yest")) return 1;
+  if (lower.includes("week") || lower.includes("1w")) return 7;
+  if (lower.includes("mon") || lower.includes("fri")) return 3;
+  return 0.5;
+}
+
+function healthScore(b: Boss): number {
+  const respRate = b.swipedToDM ? b.dmAccepted / b.swipedToDM : 0.5;
+  const days = parseDays(b.lastActivity);
+  const activity = Math.max(0, 1 - days / 7);
+  const pipe = STAGES.indexOf(b.stage) / (STAGES.length - 1);
+  const sent = b.sentiment === "happy" ? 1 : b.sentiment === "neutral" ? 0.55 : 0.1;
+  const status = b.status === "active" ? 1 : b.status === "idle" ? 0.5 : b.status === "no_reply" ? 0.15 : 0.4;
+  const score = respRate * 0.22 + activity * 0.22 + pipe * 0.16 + sent * 0.2 + status * 0.2;
+  return Math.max(0, Math.min(100, Math.round(score * 100)));
+}
+
+function healthTone(score: number): { cls: string; bg: string; label: string } {
+  if (score >= 70) return { cls: "text-flow", bg: "bg-flow/10 border-flow/30", label: "Healthy" };
+  if (score >= 40) return { cls: "text-warn", bg: "bg-warn/10 border-warn/30", label: "Watch" };
+  return { cls: "text-destructive", bg: "bg-destructive/10 border-destructive/30", label: "Critical" };
+}
+
+function severityOf(b: Boss): Severity {
+  const days = parseDays(b.lastActivity);
+  if (b.alert) {
+    if (/ghost|lost|withdrew|fail|down|broke/i.test(b.alert)) return "critical";
+    if (b.sentiment === "unhappy" || days >= 2) return "critical";
+    return "warning";
+  }
+  if (b.sentiment === "unhappy" && days >= 1) return "critical";
+  if (b.status === "no_reply" && days >= 2) return "critical";
+  if (b.status === "no_reply" || days >= 3) return "warning";
+  if (b.status === "idle" && days >= 1) return "nudge";
+  if (days >= 5) return "nudge";
+  return "healthy";
+}
+
+function bossOneLine(b: Boss): string {
+  const days = parseDays(b.lastActivity);
+  const lastTxt = days >= 1 ? `${Math.round(days)}d ago` : b.lastActivity;
+  const total = b.chatsOpen + b.chatsClosed;
+  const progressing = b.chatsOpen;
+  return `${b.stage} · ${progressing} of ${total || progressing} progressing · last reply ${lastTxt}`;
+}
+
+function ctaForBoss(b: Boss): { label: string; tone: "primary" | "warn" | "destructive" } {
+  if (b.status === "no_reply" || (b.alert && /no reply|ghost/i.test(b.alert))) {
+    return { label: "Send nudge", tone: "destructive" };
+  }
+  if (b.sentiment === "unhappy") return { label: "Call boss", tone: "warn" };
+  if (parseDays(b.lastActivity) >= 5) return { label: "Reassign", tone: "warn" };
+  return { label: "Send nudge", tone: "primary" };
+}
+
+/* ---------- Sparkline ---------- */
+function seedSeries(seed: string, n = 14, base = 50): number[] {
+  let s = 0;
+  for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) | 0;
+  const out: number[] = [];
+  let v = base;
+  for (let i = 0; i < n; i++) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    v = Math.max(2, Math.min(100, v + ((s % 21) - 10)));
+    out.push(v);
+  }
+  return out;
+}
+
+function Sparkline({ data, tone }: { data: number[]; tone?: "flow" | "warn" }) {
+  const w = 80, h = 22;
+  const max = Math.max(...data, 1);
+  const min = Math.min(...data);
+  const span = Math.max(1, max - min);
+  const pts = data
+    .map((v, i) => `${(i / (data.length - 1)) * w},${h - ((v - min) / span) * h}`)
+    .join(" ");
+  const stroke = tone === "warn" ? "var(--color-warn)" : tone === "flow" ? "var(--color-flow)" : "var(--color-primary)";
+  const last = data[data.length - 1];
+  const first = data[0];
+  const up = last >= first;
+  return (
+    <div className="flex items-center gap-1.5">
+      <svg width={w} height={h} className="overflow-visible">
+        <polyline points={pts} fill="none" stroke={stroke} strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+      <span className={`text-[9px] font-mono font-bold ${up ? "text-flow" : "text-warn"}`}>
+        {up ? "▲" : "▼"} {Math.abs(last - first)}
+      </span>
+    </div>
+  );
+}
+
+/* ---------- 5-dot chat journey ---------- */
+const CHAT_JOURNEY = ["Matched", "Talking", "Interview", "Offer", "Closed"] as const;
+function chatJourneyIndex(c: CandidateChat): number {
+  if (c.status === "closed") return 4;
+  const msgs = c.messages?.length ?? 0;
+  const closed = c.status === "closed";
+  if (closed && c.closeReason && POSITIVE_CLOSE.includes(c.closeReason)) return 4;
+  if (msgs >= 8) return 3; // offer-ish
+  if (msgs >= 5) return 2; // interview
+  if (msgs >= 2) return 1; // talking
+  return 0;
+}
 
 function Dashboard() {
   const [section, setSection] = useState<Section>("overview");
