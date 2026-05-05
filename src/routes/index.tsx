@@ -47,7 +47,7 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
   unhappy: { label: "Unhappy", cls: "text-warn" },
 };
 
-type Section = "alerts" | "overview" | "tracker" | "chats";
+type Section = "overview" | "tracker" | "chats";
 type Severity = "critical" | "warning" | "nudge" | "healthy";
 
 /* ---------- Health + severity helpers ---------- */
@@ -215,7 +215,6 @@ function Dashboard() {
   }, [filtered, stageFilter, interviewChannel]);
 
   const sectionTitle: Record<Section, string> = {
-    alerts: "Alerts · critical cases",
     overview: view === "all" ? "All bosses" : `My bosses · ${me}`,
     tracker: "Trackers · live analytics",
     chats: "Chats · grouped by boss",
@@ -242,7 +241,7 @@ function Dashboard() {
           scope={scope}
           setScope={setScope}
           alerts={alerts}
-          onAlertsClick={() => setSection("alerts")}
+          onAlertsClick={() => setSection("overview")}
         />
 
         <FilterBar
@@ -267,9 +266,7 @@ function Dashboard() {
             subtitle={
               section === "chats"
                 ? `${interviewFiltered.flatMap((b) => b.candidateChats).length} chats across ${interviewFiltered.length} bosses`
-                : section === "alerts"
-                ? `${alertBosses.length} bosses need attention`
-                : `${interviewFiltered.length} bosses in scope`
+                : `${interviewFiltered.length} bosses in scope · ${alertBosses.length} need attention`
             }
           />
 
@@ -277,9 +274,6 @@ function Dashboard() {
             <InterviewChannelTabs value={interviewChannel} onChange={setInterviewChannel} bosses={filtered} />
           )}
 
-          {section === "alerts" && (
-            <AlertsPanel bosses={filtered} onOpen={setSelected} />
-          )}
           {section === "overview" && (
             <OverviewZones bosses={interviewFiltered} onOpen={setSelected} />
           )}
@@ -323,13 +317,6 @@ function SideNav({
   chatCount: number;
 }) {
   const items: { key: Section; label: string; badge?: number; tone?: "warn"; icon: React.ReactNode }[] = [
-    {
-      key: "alerts",
-      label: "Alerts",
-      badge: alerts,
-      tone: "warn",
-      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M12 9v4"/><path d="M12 17h.01"/><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/></svg>),
-    },
     {
       key: "overview",
       label: "Overview",
