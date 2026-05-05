@@ -1385,27 +1385,37 @@ function OverviewZones({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) =
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
 
   return (
-    <div className="space-y-6">
-      <section>
-        <ZoneHeader tone="critical" label="Needs you now" count={critical.length} hint="Critical issues — act today" />
-        {critical.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground italic">Nothing critical. 🎉</div>
-        ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-            {critical.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="critical" onOpen={onOpen} />)}
-          </div>
-        )}
+    <div className="space-y-5">
+      <div className="grid grid-cols-3 gap-2">
+        <ZoneSummary tone="critical" label="Needs you now" count={critical.length} hint="Act today" />
+        <ZoneSummary tone="warning" label="Watch" count={watch.length} hint="Check this week" />
+        <ZoneSummary tone="healthy" label="Healthy" count={healthy.length} hint="On track" />
+      </div>
+
+      <section className="rounded-2xl border border-destructive/25 bg-destructive/[0.02] p-4">
+        <ZoneHeader tone="critical" label="Needs you now" count={critical.length} hint="Critical issues — one CTA per card" />
+        <div className="mt-3">
+          {critical.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground italic">Nothing critical right now. 🎉</div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+              {critical.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="critical" onOpen={onOpen} />)}
+            </div>
+          )}
+        </div>
       </section>
 
-      <section>
-        <ZoneHeader tone="warning" label="Watch" count={watch.length} hint="Concerning but not critical" />
-        {watch.length === 0 ? (
-          <div className="text-[11px] text-muted-foreground italic">Nothing to watch.</div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {watch.slice(0, 6).map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="warning" onOpen={onOpen} compact />)}
-          </div>
-        )}
+      <section className="rounded-2xl border border-warn/25 bg-warn/[0.02] p-4">
+        <ZoneHeader tone="warning" label="Watch" count={watch.length} hint="Concerning but not critical · top 6 shown" />
+        <div className="mt-3">
+          {watch.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground italic">Nothing to watch.</div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {watch.slice(0, 6).map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="warning" onOpen={onOpen} compact />)}
+            </div>
+          )}
+        </div>
       </section>
 
       <section>
@@ -1425,6 +1435,27 @@ function OverviewZones({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) =
           </div>
         )}
       </section>
+    </div>
+  );
+}
+
+function ZoneSummary({
+  tone, label, count, hint,
+}: { tone: "critical" | "warning" | "healthy"; label: string; count: number; hint: string }) {
+  const map = {
+    critical: { border: "border-destructive/30", bg: "bg-destructive/5", txt: "text-destructive", dot: "bg-destructive" },
+    warning: { border: "border-warn/30", bg: "bg-warn/5", txt: "text-warn", dot: "bg-warn" },
+    healthy: { border: "border-flow/30", bg: "bg-flow/5", txt: "text-flow", dot: "bg-flow" },
+  } as const;
+  const t = map[tone];
+  return (
+    <div className={`p-3 rounded-xl border ${t.border} ${t.bg}`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`size-1.5 rounded-full ${t.dot}`} />
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${t.txt}`}>{label}</span>
+      </div>
+      <div className={`text-2xl font-mono font-bold mt-1 ${t.txt}`}>{count}</div>
+      <div className="text-[10px] text-muted-foreground">{hint}</div>
     </div>
   );
 }
