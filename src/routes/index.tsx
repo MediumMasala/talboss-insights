@@ -179,6 +179,7 @@ function Dashboard() {
   const [interviewChannel, setInterviewChannel] = useState<"all" | "app" | "external">("all");
   const [selected, setSelected] = useState<Boss | null>(null);
   const [trackerDrill, setTrackerDrill] = useState<{ title: string; bosses: Boss[] } | null>(null);
+  const [chatDrill, setChatDrill] = useState<{ title: string; chats: CandidateChat[] } | null>(null);
 
   const filtered = useMemo(() => {
     return BOSSES.filter((b) => {
