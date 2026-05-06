@@ -1927,7 +1927,8 @@ function ChatStream({
 }) {
   const [seg, setSeg] = useState<"all" | "open" | "closed">("all");
   const [selectedChat, setSelectedChat] = useState<CandidateChat | null>(null);
-  const [expandedBoss, setExpandedBoss] = useState<string | null>(null);
+  // null = explicitly closed by user; undefined = not yet interacted (auto-expand active)
+  const [expandedBoss, setExpandedBoss] = useState<string | null | undefined>(undefined);
 
   const inScopeIds = new Set(bosses.map((b) => b.id));
   const allChats = useMemo(
