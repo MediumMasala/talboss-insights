@@ -246,7 +246,7 @@ function Dashboard() {
   }, [filtered, stageFilter, interviewChannel]);
 
   const sectionTitle: Record<Section, string> = {
-    overview: "Alerts · what needs your attention",
+    overview: "Alerts · bosses needing attention",
     tracker: "Trackers · live analytics",
     chats: "Chats · grouped by boss",
   };
