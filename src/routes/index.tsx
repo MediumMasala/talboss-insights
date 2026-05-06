@@ -741,8 +741,84 @@ function KPI({ label, value, sub, tone, series }: { label: string; value: number
   );
 }
 
-function TrackerLabel({ children }: { children: React.ReactNode }) {
+function BigMetric({ label, value, sub, tone, series }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn"; series?: number[] }) {
+  const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
+  const border = tone === "flow" ? "border-flow/30 bg-flow/5" : tone === "warn" ? "border-warn/30 bg-warn/5" : "border-border bg-surface";
   return (
+    <div className={`rounded-xl border p-4 ${border}`}>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="flex items-end justify-between gap-2 mt-1">
+        <div className={`text-3xl font-mono font-bold ${cls}`}>{value}</div>
+        {series && <Sparkline data={series} tone={tone} />}
+      </div>
+      {sub && <div className="text-[11px] text-muted-foreground font-mono mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+/* ---------- Funnel viz ---------- */
+function FunnelViz({ bosses, onDrill }: { bosses: Boss[]; onDrill: (d: { title: string; bosses: Boss[] }) => void }) {
+  // Cleared = bosses currently at a later stage (passed through this stage)
+  // Stuck = bosses currently AT this stage and not active for >= 1 day
+  const stages = STAGES.map((stage, i) => {
+    const reached = bosses.filter((b) => STAGES.indexOf(b.stage) >= i);
+    const at = bosses.filter((b) => b.stage === stage);
+    const cleared = bosses.filter((b) => STAGES.indexOf(b.stage) > i);
+    const stuck = at.filter((b) => parseDays(b.lastActivity) >= 1);
+    return { stage, reached, at, cleared, stuck };
+  });
+  const top = Math.max(1, stages[0].reached.length);
+
+  return (
+    <div className="space-y-1">
+      {stages.map((s, i) => {
+        const widthPct = Math.max(8, (s.reached.length / top) * 100);
+        return (
+          <div key={s.stage} className="flex items-center gap-3">
+            <div className="w-28 shrink-0">
+              <div className="text-[11px] font-bold truncate">{s.stage}</div>
+              <div className="text-[9px] text-muted-foreground font-mono">{s.reached.length} reached</div>
+            </div>
+            <div className="flex-1 relative">
+              <div
+                className="mx-auto h-12 rounded-md bg-primary/20 border border-primary/30 flex items-stretch overflow-hidden transition-all"
+                style={{ width: `${widthPct}%` }}
+              >
+                <button
+                  onClick={() => onDrill({ title: `Cleared past ${s.stage}`, bosses: s.cleared })}
+                  className="flex-1 flex flex-col items-center justify-center bg-flow/15 hover:bg-flow/25 transition-colors border-r border-border/50"
+                  disabled={s.cleared.length === 0}
+                >
+                  <span className="text-[10px] uppercase tracking-widest text-flow font-bold">Cleared</span>
+                  <span className="text-sm font-mono font-bold text-flow">{s.cleared.length}</span>
+                </button>
+                <button
+                  onClick={() => onDrill({ title: `Stuck in ${s.stage} (>1 day)`, bosses: s.stuck })}
+                  className="flex-1 flex flex-col items-center justify-center bg-warn/15 hover:bg-warn/25 transition-colors"
+                  disabled={s.stuck.length === 0}
+                >
+                  <span className="text-[10px] uppercase tracking-widest text-warn font-bold">Stuck</span>
+                  <span className="text-sm font-mono font-bold text-warn">{s.stuck.length}</span>
+                </button>
+              </div>
+            </div>
+            <div className="w-20 text-right shrink-0">
+              <div className="text-[11px] font-mono font-bold">{s.at.length}</div>
+              <div className="text-[9px] text-muted-foreground">currently here</div>
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex items-center gap-3 pt-2 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1"><span className="size-2 rounded bg-flow/40 border border-flow/50" />Cleared = moved past stage</span>
+        <span className="flex items-center gap-1"><span className="size-2 rounded bg-warn/40 border border-warn/50" />Stuck = at stage, idle ≥1d</span>
+        <span className="ml-auto">Click any segment to see bosses with how long they've been stuck</span>
+      </div>
+    </div>
+  );
+}
+
+
     <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
       {children}
     </div>
