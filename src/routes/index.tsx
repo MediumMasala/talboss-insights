@@ -179,6 +179,7 @@ function Dashboard() {
   const [interviewChannel, setInterviewChannel] = useState<"all" | "app" | "external">("all");
   const [selected, setSelected] = useState<Boss | null>(null);
   const [trackerDrill, setTrackerDrill] = useState<{ title: string; bosses: Boss[] } | null>(null);
+  const [chatDrill, setChatDrill] = useState<{ title: string; chats: CandidateChat[] } | null>(null);
 
   const filtered = useMemo(() => {
     return BOSSES.filter((b) => {
@@ -215,7 +216,7 @@ function Dashboard() {
   }, [filtered, stageFilter, interviewChannel]);
 
   const sectionTitle: Record<Section, string> = {
-    overview: view === "all" ? "All bosses" : `My bosses · ${me}`,
+    overview: "Alerts · what needs your attention",
     tracker: "Trackers · live analytics",
     chats: "Chats · grouped by boss",
   };
@@ -275,10 +276,10 @@ function Dashboard() {
           )}
 
           {section === "overview" && (
-            <OverviewZones bosses={interviewFiltered} onOpen={setSelected} />
+            <AlertsView bosses={interviewFiltered} onOpen={setSelected} onChatDrill={setChatDrill} />
           )}
           {section === "tracker" && (
-            <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} />
+            <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} onChatDrill={setChatDrill} />
           )}
           {section === "chats" && (
             <ChatStream bosses={interviewFiltered} onOpenBoss={setSelected} />
@@ -294,6 +295,17 @@ function Dashboard() {
           onClose={() => setTrackerDrill(null)}
           onOpenBoss={(b) => {
             setTrackerDrill(null);
+            setSelected(b);
+          }}
+        />
+      )}
+      {chatDrill && (
+        <ChatDrillModal
+          title={chatDrill.title}
+          chats={chatDrill.chats}
+          onClose={() => setChatDrill(null)}
+          onOpenBoss={(b) => {
+            setChatDrill(null);
             setSelected(b);
           }}
         />
@@ -414,9 +426,11 @@ function InterviewChannelTabs({
 function TrackerPanel({
   bosses,
   onDrill,
+  onChatDrill,
 }: {
   bosses: Boss[];
   onDrill: (d: { title: string; bosses: Boss[] }) => void;
+  onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
 }) {
   const total = bosses.length || 1;
   const byStage = STAGES.map((s) => ({ stage: s, bosses: bosses.filter((b) => b.stage === s) }));
@@ -479,12 +493,12 @@ function TrackerPanel({
     moves.push({ from: STAGES[i], to: STAGES[i + 1], n });
   }
 
-  type TrackerTab = "today" | "pipeline" | "outcomes" | "team";
+  type TrackerTab = "today" | "funnel" | "outcomes" | "team";
   const [tab, setTab] = useState<TrackerTab>("today");
 
   const tabs: { k: TrackerTab; label: string; hint: string }[] = [
     { k: "today", label: "Today", hint: "What changed in the last 24h" },
-    { k: "pipeline", label: "Pipeline", hint: "Stages, funnel, movement" },
+    { k: "funnel", label: "Funnel", hint: "Stages, cleared vs stuck" },
     { k: "outcomes", label: "Outcomes", hint: "Hires, closes, conversion" },
     { k: "team", label: "Team", hint: "Owner load + channels" },
   ];
@@ -512,7 +526,29 @@ function TrackerPanel({
       {/* TODAY */}
       {tab === "today" && (
         <div className="space-y-4">
-          <SectionPanel title="What changed today" hint="5-bullet snapshot of day-over-day movement">
+          <SectionPanel title="Headline metrics · today" hint="The 4 numbers ops should know before standup">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              <BigMetric label="Active bosses" value={active.length} sub={`of ${bosses.length} · ${pct(active.length, total)}%`} tone="flow" series={seedSeries("active", 14, active.length * 6)} />
+              <BigMetric label="Hire rate" value={`${hireRate}%`} sub={`${totalHired} hired · ${totalNotHired} not`} tone="flow" series={seedSeries("hire", 14, hireRate)} />
+              <BigMetric label="No-reply chats" value={noReply.length} sub={`${pct(noReply.length, total)}% of bosses`} tone="warn" series={seedSeries("nr", 14, noReply.length * 6)} />
+              <BigMetric label="DM accept" value={`${dmAcceptRate}%`} sub={`${dms} of ${swipes} swipes`} series={seedSeries("dm", 14, dmAcceptRate)} />
+            </div>
+          </SectionPanel>
+
+          <SectionPanel title="Secondary metrics" hint="14-day trend per metric">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              <KPI label="Bosses" value={bosses.length} series={seedSeries("bosses", 14, bosses.length)} />
+              <KPI label="Avg intent" value={`${avgIntent}%`} series={seedSeries("intent", 14, avgIntent)} />
+              <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}%`} tone="flow" series={seedSeries("verified", 14, verified.length * 5)} />
+              <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} series={seedSeries("onboarded", 14, onboarded.length * 5)} />
+              <KPI label="Open chats" value={totalOpenChats} series={seedSeries("openchats", 14, totalOpenChats * 3)} />
+              <KPI label="Closed chats" value={totalClosedChats} series={seedSeries("closedchats", 14, totalClosedChats * 3)} />
+              <KPI label="Open roles" value={totalRoles} series={seedSeries("roles", 14, totalRoles * 4)} />
+              <KPI label="Idle" value={idle.length} series={seedSeries("idle", 14, idle.length * 4)} />
+            </div>
+          </SectionPanel>
+
+          <SectionPanel title="What changed today" hint="Day-over-day movement">
             <ul className="space-y-1.5">
               {changes.map((c, i) => (
                 <li key={i} className="flex items-start gap-2 text-[12px] text-foreground/90">
@@ -522,25 +558,16 @@ function TrackerPanel({
               ))}
             </ul>
           </SectionPanel>
-
-          <SectionPanel title="Headline metrics" hint="14-day trend per metric · click sparkline shows direction">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              <KPI label="Bosses" value={bosses.length} series={seedSeries("bosses", 14, bosses.length)} />
-              <KPI label="Active now" value={active.length} tone="flow" series={seedSeries("active", 14, active.length * 6)} />
-              <KPI label="No reply" value={noReply.length} tone="warn" series={seedSeries("noreply", 14, noReply.length * 6)} />
-              <KPI label="Avg intent" value={`${avgIntent}%`} series={seedSeries("intent", 14, avgIntent)} />
-              <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}%`} tone="flow" series={seedSeries("verified", 14, verified.length * 5)} />
-              <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} series={seedSeries("onboarded", 14, onboarded.length * 5)} />
-              <KPI label="Open chats" value={totalOpenChats} series={seedSeries("openchats", 14, totalOpenChats * 3)} />
-              <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% rate`} series={seedSeries("hired", 14, totalHired * 8)} />
-            </div>
-          </SectionPanel>
         </div>
       )}
 
-      {/* PIPELINE */}
-      {tab === "pipeline" && (
+      {/* FUNNEL */}
+      {tab === "funnel" && (
         <div className="space-y-4">
+          <SectionPanel title="Funnel · stages" hint="Width = bosses who reached the stage · click cleared / stuck to drill in">
+            <FunnelViz bosses={bosses} onDrill={onDrill} />
+          </SectionPanel>
+
           <SectionPanel title="Stage movement · this week" hint="Bosses that advanced from one stage to the next">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
               {moves.map((m) => (
@@ -552,30 +579,6 @@ function TrackerPanel({
                   <span className="font-semibold truncate">{m.to}</span>
                 </div>
               ))}
-            </div>
-          </SectionPanel>
-
-          <SectionPanel title="Pipeline funnel" hint={`Distribution across ${total} bosses · click a row to drill in`}>
-            <div className="space-y-1.5">
-              {byStage.map((s) => {
-                const p = Math.round((s.bosses.length / total) * 100);
-                const w = (s.bosses.length / maxStageCount) * 100;
-                return (
-                  <button
-                    key={s.stage}
-                    onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
-                    className="w-full flex items-center gap-3 text-left group"
-                    disabled={s.bosses.length === 0}
-                  >
-                    <span className="w-24 text-[11px] font-semibold text-foreground/80 shrink-0 truncate">{s.stage}</span>
-                    <div className="flex-1 h-6 bg-surface rounded-md overflow-hidden border border-border relative">
-                      <div className="h-full bg-primary/80 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
-                      <span className="absolute inset-0 flex items-center px-2 text-[11px] font-mono font-bold text-foreground">{s.bosses.length}</span>
-                    </div>
-                    <span className="w-12 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
-                  </button>
-                );
-              })}
             </div>
           </SectionPanel>
         </div>
@@ -610,32 +613,44 @@ function TrackerPanel({
           </SectionPanel>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SectionPanel title="Positive closes" hint={`${positiveClosed.length} across ${bossesWithPositive.length} bosses`}>
-              <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="w-full text-left">
-                <div className="space-y-1">
-                  {Object.entries(posByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
-                    <div key={r} className="flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface">
-                      <span className="flex-1 truncate">{r}</span>
-                      <span className="font-mono font-bold text-flow">{n}</span>
-                    </div>
-                  ))}
-                  {positiveClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None yet.</div>}
-                </div>
-              </button>
+            <SectionPanel title="Positive closes" hint={`${positiveClosed.length} chats · click a reason to see only those chats`}>
+              <div className="space-y-1">
+                {Object.entries(posByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+                  <button
+                    key={r}
+                    onClick={() => onChatDrill({
+                      title: `Positive close · ${r}`,
+                      chats: positiveClosed.filter((c) => c.closeReason === r),
+                    })}
+                    className="w-full flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface text-left"
+                  >
+                    <span className="flex-1 truncate">{r}</span>
+                    <span className="font-mono font-bold text-flow">{n}</span>
+                    <span className="text-muted-foreground text-[10px]">→</span>
+                  </button>
+                ))}
+                {positiveClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None yet.</div>}
+              </div>
             </SectionPanel>
 
-            <SectionPanel title="Negative closes" hint={`${negativeClosed.length} across ${bossesWithNegative.length} bosses`}>
-              <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="w-full text-left">
-                <div className="space-y-1">
-                  {Object.entries(negByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
-                    <div key={r} className="flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface">
-                      <span className="flex-1 truncate">{r}</span>
-                      <span className="font-mono font-bold text-warn">{n}</span>
-                    </div>
-                  ))}
-                  {negativeClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
-                </div>
-              </button>
+            <SectionPanel title="Negative closes" hint={`${negativeClosed.length} chats · click a reason to see only those chats`}>
+              <div className="space-y-1">
+                {Object.entries(negByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+                  <button
+                    key={r}
+                    onClick={() => onChatDrill({
+                      title: `Negative close · ${r}`,
+                      chats: negativeClosed.filter((c) => c.closeReason === r),
+                    })}
+                    className="w-full flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface text-left"
+                  >
+                    <span className="flex-1 truncate">{r}</span>
+                    <span className="font-mono font-bold text-warn">{n}</span>
+                    <span className="text-muted-foreground text-[10px]">→</span>
+                  </button>
+                ))}
+                {negativeClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
+              </div>
             </SectionPanel>
           </div>
 
@@ -726,6 +741,83 @@ function KPI({ label, value, sub, tone, series }: { label: string; value: number
   );
 }
 
+function BigMetric({ label, value, sub, tone, series }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn"; series?: number[] }) {
+  const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
+  const border = tone === "flow" ? "border-flow/30 bg-flow/5" : tone === "warn" ? "border-warn/30 bg-warn/5" : "border-border bg-surface";
+  return (
+    <div className={`rounded-xl border p-4 ${border}`}>
+      <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="flex items-end justify-between gap-2 mt-1">
+        <div className={`text-3xl font-mono font-bold ${cls}`}>{value}</div>
+        {series && <Sparkline data={series} tone={tone} />}
+      </div>
+      {sub && <div className="text-[11px] text-muted-foreground font-mono mt-1">{sub}</div>}
+    </div>
+  );
+}
+
+/* ---------- Funnel viz ---------- */
+function FunnelViz({ bosses, onDrill }: { bosses: Boss[]; onDrill: (d: { title: string; bosses: Boss[] }) => void }) {
+  // Cleared = bosses currently at a later stage (passed through this stage)
+  // Stuck = bosses currently AT this stage and not active for >= 1 day
+  const stages = STAGES.map((stage, i) => {
+    const reached = bosses.filter((b) => STAGES.indexOf(b.stage) >= i);
+    const at = bosses.filter((b) => b.stage === stage);
+    const cleared = bosses.filter((b) => STAGES.indexOf(b.stage) > i);
+    const stuck = at.filter((b) => parseDays(b.lastActivity) >= 1);
+    return { stage, reached, at, cleared, stuck };
+  });
+  const top = Math.max(1, stages[0].reached.length);
+
+  return (
+    <div className="space-y-1">
+      {stages.map((s, i) => {
+        const widthPct = Math.max(8, (s.reached.length / top) * 100);
+        return (
+          <div key={s.stage} className="flex items-center gap-3">
+            <div className="w-28 shrink-0">
+              <div className="text-[11px] font-bold truncate">{s.stage}</div>
+              <div className="text-[9px] text-muted-foreground font-mono">{s.reached.length} reached</div>
+            </div>
+            <div className="flex-1 relative">
+              <div
+                className="mx-auto h-12 rounded-md bg-primary/20 border border-primary/30 flex items-stretch overflow-hidden transition-all"
+                style={{ width: `${widthPct}%` }}
+              >
+                <button
+                  onClick={() => onDrill({ title: `Cleared past ${s.stage}`, bosses: s.cleared })}
+                  className="flex-1 flex flex-col items-center justify-center bg-flow/15 hover:bg-flow/25 transition-colors border-r border-border/50"
+                  disabled={s.cleared.length === 0}
+                >
+                  <span className="text-[10px] uppercase tracking-widest text-flow font-bold">Cleared</span>
+                  <span className="text-sm font-mono font-bold text-flow">{s.cleared.length}</span>
+                </button>
+                <button
+                  onClick={() => onDrill({ title: `Stuck in ${s.stage} (>1 day)`, bosses: s.stuck })}
+                  className="flex-1 flex flex-col items-center justify-center bg-warn/15 hover:bg-warn/25 transition-colors"
+                  disabled={s.stuck.length === 0}
+                >
+                  <span className="text-[10px] uppercase tracking-widest text-warn font-bold">Stuck</span>
+                  <span className="text-sm font-mono font-bold text-warn">{s.stuck.length}</span>
+                </button>
+              </div>
+            </div>
+            <div className="w-20 text-right shrink-0">
+              <div className="text-[11px] font-mono font-bold">{s.at.length}</div>
+              <div className="text-[9px] text-muted-foreground">currently here</div>
+            </div>
+          </div>
+        );
+      })}
+      <div className="flex items-center gap-3 pt-2 text-[10px] text-muted-foreground">
+        <span className="flex items-center gap-1"><span className="size-2 rounded bg-flow/40 border border-flow/50" />Cleared = moved past stage</span>
+        <span className="flex items-center gap-1"><span className="size-2 rounded bg-warn/40 border border-warn/50" />Stuck = at stage, idle ≥1d</span>
+        <span className="ml-auto">Click any segment to see bosses with how long they've been stuck</span>
+      </div>
+    </div>
+  );
+}
+
 function TrackerLabel({ children }: { children: React.ReactNode }) {
   return (
     <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
@@ -811,6 +903,68 @@ function DrillModal({
               <span className="text-[10px] font-mono text-muted-foreground">{b.id}</span>
             </button>
           ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Chat drill modal ---------- */
+function ChatDrillModal({
+  title,
+  chats,
+  onClose,
+  onOpenBoss,
+}: {
+  title: string;
+  chats: CandidateChat[];
+  onClose: () => void;
+  onOpenBoss: (b: Boss) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal>
+      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
+      <div className="relative w-full max-w-xl max-h-[80dvh] bg-surface border border-border rounded-2xl shadow-xl overflow-hidden animate-fade-in flex flex-col">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-sm">{title}</h3>
+            <p className="text-[11px] text-muted-foreground">{chats.length} chats</p>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-md border border-border hover:bg-surface-elevated text-muted-foreground">✕</button>
+        </div>
+        <div className="overflow-y-auto divide-y divide-border">
+          {chats.length === 0 && (
+            <div className="p-8 text-center text-sm text-muted-foreground">No chats in this segment.</div>
+          )}
+          {chats.map((c) => {
+            const boss = bossById(c.bossId);
+            const isPos = c.closeReason && POSITIVE_CLOSE.includes(c.closeReason);
+            return (
+              <button
+                key={c.id}
+                onClick={() => boss && onOpenBoss(boss)}
+                className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-elevated transition-colors"
+              >
+                <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold border border-primary/20">
+                  {initials(c.candidateName)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">
+                    {c.candidateName} <span className="text-muted-foreground font-normal">→ {boss?.name}</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground truncate">{c.forRole} · {c.lastMessage}</div>
+                </div>
+                {c.closeReason && (
+                  <span className={`text-[9px] px-2 py-0.5 rounded border whitespace-nowrap ${
+                    isPos ? "bg-flow/10 text-flow border-flow/20" : "bg-warn/10 text-warn border-warn/20"
+                  }`}>
+                    {c.closeReason}
+                  </span>
+                )}
+                <span className="text-[10px] font-mono text-muted-foreground">{c.lastTime}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
     </div>
@@ -1362,66 +1516,297 @@ function AlertRow({ boss, sev, onOpen }: { boss: Boss; sev: Severity; onOpen: (b
 
 /* ---------- Overview zones ---------- */
 function OverviewZones({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) => void }) {
-  const sorted = [...bosses].sort((a, b) => healthScore(a) - healthScore(b));
-  const tagged = sorted.map((b) => ({ b, sev: severityOf(b), score: healthScore(b) }));
-  const critical = tagged.filter((t) => t.sev === "critical");
-  const watch = tagged.filter((t) => t.sev === "warning" || t.sev === "nudge");
-  const healthy = tagged.filter((t) => t.sev === "healthy");
+  return <AlertsView bosses={bosses} onOpen={onOpen} onChatDrill={() => {}} />;
+}
+
+/* ---------- Alerts view (structured by category) ---------- */
+function minutesAgo(ts: number): number {
+  return Math.max(0, Math.round((Date.now() - ts) / 60000));
+}
+function fmtSince(mins: number): string {
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.round(mins / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+function AlertsView({
+  bosses,
+  onOpen,
+  onChatDrill,
+}: {
+  bosses: Boss[];
+  onOpen: (b: Boss) => void;
+  onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
+}) {
+  const [tab, setTab] = useState<"all" | "chats" | "funnel" | "outcomes">("all");
+
+  const NO_REPLY_MIN = 30;
+  const chatNoReply = bosses
+    .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
+    .filter(({ c }) => c.status === "open" && c.chatStatus !== "active" && minutesAgo(c.lastTs) >= NO_REPLY_MIN)
+    .sort((a, b) => a.c.lastTs - b.c.lastTs);
+
+  const STUCK_MIN = 30;
+  const stuck = bosses
+    .map((b) => ({ b, mins: Math.round(parseDays(b.lastActivity) * 24 * 60) || (b.status === "active" ? 0 : 60) }))
+    .filter(({ b, mins }) => mins >= STUCK_MIN && b.stage !== "Closing" && b.status !== "active")
+    .sort((a, b) => b.mins - a.mins);
+
+  const negativeChats = bosses
+    .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
+    .filter(({ c }) => c.status === "closed" && c.closeReason && NEGATIVE_CLOSE.includes(c.closeReason))
+    .sort((a, b) => b.c.lastTs - a.c.lastTs);
+
+  const lowAccept = bosses.filter((b) => b.swipedToDM >= 5 && b.dmAccepted / b.swipedToDM < 0.4);
+  const criticalBosses = bosses.filter((b) => severityOf(b) === "critical");
+  const healthy = bosses.filter((b) => severityOf(b) === "healthy");
   const [healthyOpen, setHealthyOpen] = useState(false);
+
+  const totalAlerts = chatNoReply.length + stuck.length + negativeChats.length + lowAccept.length + criticalBosses.length;
+
+  const tabs = [
+    { k: "all" as const, label: "All", count: totalAlerts },
+    { k: "chats" as const, label: "Chats", count: chatNoReply.length },
+    { k: "funnel" as const, label: "Funnel", count: stuck.length + lowAccept.length },
+    { k: "outcomes" as const, label: "Outcomes", count: negativeChats.length + criticalBosses.length },
+  ];
 
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
 
+  const showChats = tab === "all" || tab === "chats";
+  const showFunnel = tab === "all" || tab === "funnel";
+  const showOutcomes = tab === "all" || tab === "outcomes";
+
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-2">
-        <ZoneSummary tone="critical" label="Needs you now" count={critical.length} hint="Act today" />
-        <ZoneSummary tone="warning" label="Watch" count={watch.length} hint="Check this week" />
-        <ZoneSummary tone="healthy" label="Healthy" count={healthy.length} hint="On track" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <AlertSummary tone="critical" label="Chats no-reply >30m" count={chatNoReply.length} hint="Post-nudge window" />
+        <AlertSummary tone="warning" label="Funnel stuck >30m" count={stuck.length} hint="Same stage, no movement" />
+        <AlertSummary tone="warning" label="Negative closes" count={negativeChats.length} hint="Recent losses" />
+        <AlertSummary tone="healthy" label="Healthy bosses" count={healthy.length} hint="On track" />
       </div>
 
-      <section className="rounded-2xl border border-destructive/25 bg-destructive/[0.02] p-4">
-        <ZoneHeader tone="critical" label="Needs you now" count={critical.length} hint="Critical issues — one CTA per card" />
-        <div className="mt-3">
-          {critical.length === 0 ? (
-            <div className="text-[11px] text-muted-foreground italic">Nothing critical right now. 🎉</div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {critical.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="critical" onOpen={onOpen} />)}
+      <div className="flex flex-wrap items-center gap-1 p-1 bg-surface border border-border rounded-lg w-fit">
+        {tabs.map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k)}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              tab === t.k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label} <span className="font-mono opacity-70">· {t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {showChats && (
+        <AlertGroup tone="critical" title="Chat no-reply · >30 min" hint="No reply 30m after the auto-nudge window" empty="All chats responded within window.">
+          {chatNoReply.slice(0, 8).map(({ b, c }) => (
+            <ChatAlertRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
+          ))}
+          {chatNoReply.length > 8 && (
+            <button
+              onClick={() => onChatDrill({ title: "Chats with no reply >30m", chats: chatNoReply.map((x) => x.c) })}
+              className="text-[11px] text-primary font-semibold hover:underline"
+            >
+              View all {chatNoReply.length} →
+            </button>
+          )}
+        </AlertGroup>
+      )}
+
+      {showFunnel && (
+        <AlertGroup tone="warning" title="Funnel drop-off · stuck >30 min" hint="Bosses sitting in the same stage with no activity" empty="Pipeline is moving cleanly.">
+          {stuck.slice(0, 8).map(({ b, mins }) => (
+            <StuckRow key={b.id} boss={b} mins={mins} onOpen={onOpen} />
+          ))}
+        </AlertGroup>
+      )}
+
+      {showFunnel && lowAccept.length > 0 && (
+        <AlertGroup tone="warning" title="Low DM accept rate" hint="Bosses with <40% DM acceptance after 5+ swipes" empty="">
+          {lowAccept.map((b) => (
+            <BossAlertRow key={b.id} boss={b} reason={`${Math.round((b.dmAccepted / b.swipedToDM) * 100)}% accept · ${b.swipedToDM} swipes`} onOpen={onOpen} />
+          ))}
+        </AlertGroup>
+      )}
+
+      {showOutcomes && (
+        <AlertGroup tone="critical" title="Negative closes · review reasons" hint="Recent chats closed with a negative outcome" empty="No negative closes.">
+          {negativeChats.slice(0, 8).map(({ b, c }) => (
+            <NegativeCloseRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
+          ))}
+          {negativeChats.length > 8 && (
+            <button
+              onClick={() => onChatDrill({ title: "Negative closes", chats: negativeChats.map((x) => x.c) })}
+              className="text-[11px] text-primary font-semibold hover:underline"
+            >
+              View all {negativeChats.length} →
+            </button>
+          )}
+        </AlertGroup>
+      )}
+
+      {showOutcomes && criticalBosses.length > 0 && (
+        <AlertGroup tone="critical" title="Critical bosses" hint="Unhappy, ghosted, or stalled high-priority bosses" empty="">
+          {criticalBosses.map((b) => (
+            <BossAlertRow key={b.id} boss={b} reason={b.alert ?? bossOneLine(b)} onOpen={onOpen} whatsapp />
+          ))}
+        </AlertGroup>
+      )}
+
+      {tab === "all" && (
+        <section>
+          <button
+            onClick={() => setHealthyOpen((o) => !o)}
+            className="w-full flex items-center justify-between p-3 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-flow" />
+              <span className="text-sm font-semibold text-flow">{healthy.length} bosses healthy. All on track.</span>
+            </div>
+            <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
+          </button>
+          {healthyOpen && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+              {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
             </div>
           )}
-        </div>
-      </section>
+        </section>
+      )}
+    </div>
+  );
+}
 
-      <section className="rounded-2xl border border-warn/25 bg-warn/[0.02] p-4">
-        <ZoneHeader tone="warning" label="Watch" count={watch.length} hint="Concerning but not critical · top 6 shown" />
-        <div className="mt-3">
-          {watch.length === 0 ? (
-            <div className="text-[11px] text-muted-foreground italic">Nothing to watch.</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {watch.slice(0, 6).map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="warning" onOpen={onOpen} compact />)}
-            </div>
-          )}
-        </div>
-      </section>
+function AlertSummary({ tone, label, count, hint }: { tone: "critical" | "warning" | "healthy"; label: string; count: number; hint: string }) {
+  const map = {
+    critical: { border: "border-destructive/30", bg: "bg-destructive/5", txt: "text-destructive", dot: "bg-destructive" },
+    warning: { border: "border-warn/30", bg: "bg-warn/5", txt: "text-warn", dot: "bg-warn" },
+    healthy: { border: "border-flow/30", bg: "bg-flow/5", txt: "text-flow", dot: "bg-flow" },
+  } as const;
+  const t = map[tone];
+  return (
+    <div className={`p-3 rounded-xl border ${t.border} ${t.bg}`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`size-1.5 rounded-full ${t.dot}`} />
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${t.txt}`}>{label}</span>
+      </div>
+      <div className={`text-2xl font-mono font-bold mt-1 ${t.txt}`}>{count}</div>
+      <div className="text-[10px] text-muted-foreground">{hint}</div>
+    </div>
+  );
+}
 
-      <section>
-        <button
-          onClick={() => setHealthyOpen((o) => !o)}
-          className="w-full flex items-center justify-between p-3 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-flow" />
-            <span className="text-sm font-semibold text-flow">{healthy.length} bosses healthy. All on track.</span>
-          </div>
-          <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
-        </button>
-        {healthyOpen && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
-            {healthy.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="healthy" onOpen={onOpen} compact />)}
-          </div>
-        )}
-      </section>
+function AlertGroup({
+  tone, title, hint, empty, children,
+}: { tone: "critical" | "warning"; title: string; hint: string; empty: string; children: React.ReactNode }) {
+  const map = {
+    critical: { border: "border-destructive/25", bg: "bg-destructive/[0.02]", dot: "bg-destructive", txt: "text-destructive" },
+    warning: { border: "border-warn/25", bg: "bg-warn/[0.02]", dot: "bg-warn", txt: "text-warn" },
+  } as const;
+  const t = map[tone];
+  const arr = Array.isArray(children) ? children.flat() : [children];
+  const isEmpty = arr.filter(Boolean).length === 0;
+  return (
+    <section className={`rounded-2xl border ${t.border} ${t.bg} p-4`}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`size-2 rounded-full ${t.dot}`} />
+        <span className={`text-[11px] font-bold uppercase tracking-widest ${t.txt}`}>{title}</span>
+        <span className="text-[10px] text-muted-foreground">· {hint}</span>
+      </div>
+      {isEmpty ? (
+        <div className="text-[11px] text-muted-foreground italic">{empty}</div>
+      ) : (
+        <div className="space-y-2">{children}</div>
+      )}
+    </section>
+  );
+}
+
+function WhatsAppBtn({ label = "Send WhatsApp nudge" }: { label?: string }) {
+  return (
+    <button className="text-[11px] font-bold px-3 py-1.5 rounded-md shrink-0 bg-flow text-white inline-flex items-center gap-1.5 hover:opacity-90 transition-opacity">
+      <svg viewBox="0 0 24 24" className="size-3.5" fill="currentColor"><path d="M17.5 14.4c-.3-.1-1.7-.8-2-.9s-.5-.1-.7.1-.8.9-.9 1.1-.3.1-.5 0-1.2-.5-2.3-1.4c-.9-.7-1.4-1.7-1.6-1.9s0-.3.1-.5l.4-.5c.1-.2.2-.3.2-.5s.1-.3 0-.5l-.7-1.7c-.2-.4-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.3s1 2.7 1.1 2.9 2 3 4.7 4.2c.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.2-.3-.2-.5-.3z"/></svg>
+      {label}
+    </button>
+  );
+}
+
+function ChatAlertRow({ boss, chat, onOpenBoss }: { boss: Boss; chat: CandidateChat; onOpenBoss: (b: Boss) => void }) {
+  const mins = minutesAgo(chat.lastTs);
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-destructive/30 bg-destructive/5">
+      <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(chat.candidateName)}
+      </div>
+      <button onClick={() => onOpenBoss(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {chat.candidateName} <span className="text-muted-foreground font-normal">→ {boss.name} · {boss.company}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">
+          For {chat.forRole} · last reply {fmtSince(mins)} · "{chat.lastMessage}"
+        </div>
+      </button>
+      <WhatsAppBtn />
+    </div>
+  );
+}
+
+function StuckRow({ boss, mins, onOpen }: { boss: Boss; mins: number; onOpen: (b: Boss) => void }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-warn/30 bg-warn/5">
+      <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(boss.name)}
+      </div>
+      <button onClick={() => onOpen(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">
+          Stuck in <span className="font-semibold text-foreground">{boss.stage}</span> for {fmtSince(mins)}
+        </div>
+      </button>
+      <WhatsAppBtn />
+    </div>
+  );
+}
+
+function NegativeCloseRow({ boss, chat, onOpenBoss }: { boss: Boss; chat: CandidateChat; onOpenBoss: (b: Boss) => void }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-destructive/30 bg-destructive/5">
+      <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(chat.candidateName)}
+      </div>
+      <button onClick={() => onOpenBoss(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {chat.candidateName} <span className="text-muted-foreground font-normal">→ {boss.name}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">
+          {chat.forRole} · closed {chat.lastTime} ago
+        </div>
+      </button>
+      <span className="text-[10px] font-bold px-2 py-1 rounded bg-destructive/10 text-destructive border border-destructive/20 shrink-0">
+        {chat.closeReason}
+      </span>
+    </div>
+  );
+}
+
+function BossAlertRow({ boss, reason, onOpen, whatsapp }: { boss: Boss; reason: string; onOpen: (b: Boss) => void; whatsapp?: boolean }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-destructive/30 bg-destructive/5">
+      <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(boss.name)}
+      </div>
+      <button onClick={() => onOpen(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">{reason}</div>
+      </button>
+      {whatsapp && <WhatsAppBtn />}
     </div>
   );
 }
@@ -1542,7 +1927,8 @@ function ChatStream({
 }) {
   const [seg, setSeg] = useState<"all" | "open" | "closed">("all");
   const [selectedChat, setSelectedChat] = useState<CandidateChat | null>(null);
-  const [expandedBoss, setExpandedBoss] = useState<string | null>(null);
+  // null = explicitly closed by user; undefined = not yet interacted (auto-expand active)
+  const [expandedBoss, setExpandedBoss] = useState<string | null | undefined>(undefined);
 
   const inScopeIds = new Set(bosses.map((b) => b.id));
   const allChats = useMemo(
@@ -1572,7 +1958,8 @@ function ChatStream({
 
   const active = selectedChat && filteredChats.find((c) => c.id === selectedChat.id) ? selectedChat : filteredChats[0] ?? null;
   const activeBoss = active ? bossById(active.bossId) : null;
-  const effectiveExpanded = expandedBoss ?? active?.bossId ?? grouped[0]?.boss.id ?? null;
+  const effectiveExpanded =
+    expandedBoss === undefined ? active?.bossId ?? grouped[0]?.boss.id ?? null : expandedBoss;
 
   return (
     <div className="grid grid-cols-12 gap-0 h-[calc(100dvh-340px)] min-h-[600px] border border-border rounded-2xl overflow-hidden bg-card shadow-sm">
