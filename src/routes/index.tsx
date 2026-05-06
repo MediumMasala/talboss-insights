@@ -1958,7 +1958,8 @@ function ChatStream({
 
   const active = selectedChat && filteredChats.find((c) => c.id === selectedChat.id) ? selectedChat : filteredChats[0] ?? null;
   const activeBoss = active ? bossById(active.bossId) : null;
-  const effectiveExpanded = expandedBoss ?? active?.bossId ?? grouped[0]?.boss.id ?? null;
+  const effectiveExpanded =
+    expandedBoss === undefined ? active?.bossId ?? grouped[0]?.boss.id ?? null : expandedBoss;
 
   return (
     <div className="grid grid-cols-12 gap-0 h-[calc(100dvh-340px)] min-h-[600px] border border-border rounded-2xl overflow-hidden bg-card shadow-sm">
