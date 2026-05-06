@@ -613,32 +613,44 @@ function TrackerPanel({
           </SectionPanel>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <SectionPanel title="Positive closes" hint={`${positiveClosed.length} across ${bossesWithPositive.length} bosses`}>
-              <button onClick={() => onDrill({ title: "Bosses with positive closes", bosses: bossesWithPositive })} className="w-full text-left">
-                <div className="space-y-1">
-                  {Object.entries(posByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
-                    <div key={r} className="flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface">
-                      <span className="flex-1 truncate">{r}</span>
-                      <span className="font-mono font-bold text-flow">{n}</span>
-                    </div>
-                  ))}
-                  {positiveClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None yet.</div>}
-                </div>
-              </button>
+            <SectionPanel title="Positive closes" hint={`${positiveClosed.length} chats · click a reason to see only those chats`}>
+              <div className="space-y-1">
+                {Object.entries(posByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+                  <button
+                    key={r}
+                    onClick={() => onChatDrill({
+                      title: `Positive close · ${r}`,
+                      chats: positiveClosed.filter((c) => c.closeReason === r),
+                    })}
+                    className="w-full flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface text-left"
+                  >
+                    <span className="flex-1 truncate">{r}</span>
+                    <span className="font-mono font-bold text-flow">{n}</span>
+                    <span className="text-muted-foreground text-[10px]">→</span>
+                  </button>
+                ))}
+                {positiveClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None yet.</div>}
+              </div>
             </SectionPanel>
 
-            <SectionPanel title="Negative closes" hint={`${negativeClosed.length} across ${bossesWithNegative.length} bosses`}>
-              <button onClick={() => onDrill({ title: "Bosses with negative closes", bosses: bossesWithNegative })} className="w-full text-left">
-                <div className="space-y-1">
-                  {Object.entries(negByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
-                    <div key={r} className="flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface">
-                      <span className="flex-1 truncate">{r}</span>
-                      <span className="font-mono font-bold text-warn">{n}</span>
-                    </div>
-                  ))}
-                  {negativeClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
-                </div>
-              </button>
+            <SectionPanel title="Negative closes" hint={`${negativeClosed.length} chats · click a reason to see only those chats`}>
+              <div className="space-y-1">
+                {Object.entries(negByReason).sort((a, b) => b[1] - a[1]).map(([r, n]) => (
+                  <button
+                    key={r}
+                    onClick={() => onChatDrill({
+                      title: `Negative close · ${r}`,
+                      chats: negativeClosed.filter((c) => c.closeReason === r),
+                    })}
+                    className="w-full flex items-center gap-2 text-[12px] p-1.5 rounded hover:bg-surface text-left"
+                  >
+                    <span className="flex-1 truncate">{r}</span>
+                    <span className="font-mono font-bold text-warn">{n}</span>
+                    <span className="text-muted-foreground text-[10px]">→</span>
+                  </button>
+                ))}
+                {negativeClosed.length === 0 && <div className="text-[11px] text-muted-foreground">None.</div>}
+              </div>
             </SectionPanel>
           </div>
 
