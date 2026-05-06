@@ -818,7 +818,8 @@ function FunnelViz({ bosses, onDrill }: { bosses: Boss[]; onDrill: (d: { title: 
   );
 }
 
-
+function TrackerLabel({ children }: { children: React.ReactNode }) {
+  return (
     <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2">
       {children}
     </div>
