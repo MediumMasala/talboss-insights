@@ -1436,66 +1436,297 @@ function AlertRow({ boss, sev, onOpen }: { boss: Boss; sev: Severity; onOpen: (b
 
 /* ---------- Overview zones ---------- */
 function OverviewZones({ bosses, onOpen }: { bosses: Boss[]; onOpen: (b: Boss) => void }) {
-  const sorted = [...bosses].sort((a, b) => healthScore(a) - healthScore(b));
-  const tagged = sorted.map((b) => ({ b, sev: severityOf(b), score: healthScore(b) }));
-  const critical = tagged.filter((t) => t.sev === "critical");
-  const watch = tagged.filter((t) => t.sev === "warning" || t.sev === "nudge");
-  const healthy = tagged.filter((t) => t.sev === "healthy");
+  return <AlertsView bosses={bosses} onOpen={onOpen} onChatDrill={() => {}} />;
+}
+
+/* ---------- Alerts view (structured by category) ---------- */
+function minutesAgo(ts: number): number {
+  return Math.max(0, Math.round((Date.now() - ts) / 60000));
+}
+function fmtSince(mins: number): string {
+  if (mins < 60) return `${mins}m ago`;
+  const h = Math.round(mins / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.round(h / 24)}d ago`;
+}
+
+function AlertsView({
+  bosses,
+  onOpen,
+  onChatDrill,
+}: {
+  bosses: Boss[];
+  onOpen: (b: Boss) => void;
+  onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
+}) {
+  const [tab, setTab] = useState<"all" | "chats" | "funnel" | "outcomes">("all");
+
+  const NO_REPLY_MIN = 30;
+  const chatNoReply = bosses
+    .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
+    .filter(({ c }) => c.status === "open" && c.chatStatus !== "active" && minutesAgo(c.lastTs) >= NO_REPLY_MIN)
+    .sort((a, b) => a.c.lastTs - b.c.lastTs);
+
+  const STUCK_MIN = 30;
+  const stuck = bosses
+    .map((b) => ({ b, mins: Math.round(parseDays(b.lastActivity) * 24 * 60) || (b.status === "active" ? 0 : 60) }))
+    .filter(({ b, mins }) => mins >= STUCK_MIN && b.stage !== "Closing" && b.status !== "active")
+    .sort((a, b) => b.mins - a.mins);
+
+  const negativeChats = bosses
+    .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
+    .filter(({ c }) => c.status === "closed" && c.closeReason && NEGATIVE_CLOSE.includes(c.closeReason))
+    .sort((a, b) => b.c.lastTs - a.c.lastTs);
+
+  const lowAccept = bosses.filter((b) => b.swipedToDM >= 5 && b.dmAccepted / b.swipedToDM < 0.4);
+  const criticalBosses = bosses.filter((b) => severityOf(b) === "critical");
+  const healthy = bosses.filter((b) => severityOf(b) === "healthy");
   const [healthyOpen, setHealthyOpen] = useState(false);
+
+  const totalAlerts = chatNoReply.length + stuck.length + negativeChats.length + lowAccept.length + criticalBosses.length;
+
+  const tabs = [
+    { k: "all" as const, label: "All", count: totalAlerts },
+    { k: "chats" as const, label: "Chats", count: chatNoReply.length },
+    { k: "funnel" as const, label: "Funnel", count: stuck.length + lowAccept.length },
+    { k: "outcomes" as const, label: "Outcomes", count: negativeChats.length + criticalBosses.length },
+  ];
 
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
 
+  const showChats = tab === "all" || tab === "chats";
+  const showFunnel = tab === "all" || tab === "funnel";
+  const showOutcomes = tab === "all" || tab === "outcomes";
+
   return (
     <div className="space-y-5">
-      <div className="grid grid-cols-3 gap-2">
-        <ZoneSummary tone="critical" label="Needs you now" count={critical.length} hint="Act today" />
-        <ZoneSummary tone="warning" label="Watch" count={watch.length} hint="Check this week" />
-        <ZoneSummary tone="healthy" label="Healthy" count={healthy.length} hint="On track" />
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <AlertSummary tone="critical" label="Chats no-reply >30m" count={chatNoReply.length} hint="Post-nudge window" />
+        <AlertSummary tone="warning" label="Funnel stuck >30m" count={stuck.length} hint="Same stage, no movement" />
+        <AlertSummary tone="warning" label="Negative closes" count={negativeChats.length} hint="Recent losses" />
+        <AlertSummary tone="healthy" label="Healthy bosses" count={healthy.length} hint="On track" />
       </div>
 
-      <section className="rounded-2xl border border-destructive/25 bg-destructive/[0.02] p-4">
-        <ZoneHeader tone="critical" label="Needs you now" count={critical.length} hint="Critical issues — one CTA per card" />
-        <div className="mt-3">
-          {critical.length === 0 ? (
-            <div className="text-[11px] text-muted-foreground italic">Nothing critical right now. 🎉</div>
-          ) : (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-              {critical.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="critical" onOpen={onOpen} />)}
+      <div className="flex flex-wrap items-center gap-1 p-1 bg-surface border border-border rounded-lg w-fit">
+        {tabs.map((t) => (
+          <button
+            key={t.k}
+            onClick={() => setTab(t.k)}
+            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+              tab === t.k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {t.label} <span className="font-mono opacity-70">· {t.count}</span>
+          </button>
+        ))}
+      </div>
+
+      {showChats && (
+        <AlertGroup tone="critical" title="Chat no-reply · >30 min" hint="No reply 30m after the auto-nudge window" empty="All chats responded within window.">
+          {chatNoReply.slice(0, 8).map(({ b, c }) => (
+            <ChatAlertRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
+          ))}
+          {chatNoReply.length > 8 && (
+            <button
+              onClick={() => onChatDrill({ title: "Chats with no reply >30m", chats: chatNoReply.map((x) => x.c) })}
+              className="text-[11px] text-primary font-semibold hover:underline"
+            >
+              View all {chatNoReply.length} →
+            </button>
+          )}
+        </AlertGroup>
+      )}
+
+      {showFunnel && (
+        <AlertGroup tone="warning" title="Funnel drop-off · stuck >30 min" hint="Bosses sitting in the same stage with no activity" empty="Pipeline is moving cleanly.">
+          {stuck.slice(0, 8).map(({ b, mins }) => (
+            <StuckRow key={b.id} boss={b} mins={mins} onOpen={onOpen} />
+          ))}
+        </AlertGroup>
+      )}
+
+      {showFunnel && lowAccept.length > 0 && (
+        <AlertGroup tone="warning" title="Low DM accept rate" hint="Bosses with <40% DM acceptance after 5+ swipes" empty="">
+          {lowAccept.map((b) => (
+            <BossAlertRow key={b.id} boss={b} reason={`${Math.round((b.dmAccepted / b.swipedToDM) * 100)}% accept · ${b.swipedToDM} swipes`} onOpen={onOpen} />
+          ))}
+        </AlertGroup>
+      )}
+
+      {showOutcomes && (
+        <AlertGroup tone="critical" title="Negative closes · review reasons" hint="Recent chats closed with a negative outcome" empty="No negative closes.">
+          {negativeChats.slice(0, 8).map(({ b, c }) => (
+            <NegativeCloseRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
+          ))}
+          {negativeChats.length > 8 && (
+            <button
+              onClick={() => onChatDrill({ title: "Negative closes", chats: negativeChats.map((x) => x.c) })}
+              className="text-[11px] text-primary font-semibold hover:underline"
+            >
+              View all {negativeChats.length} →
+            </button>
+          )}
+        </AlertGroup>
+      )}
+
+      {showOutcomes && criticalBosses.length > 0 && (
+        <AlertGroup tone="critical" title="Critical bosses" hint="Unhappy, ghosted, or stalled high-priority bosses" empty="">
+          {criticalBosses.map((b) => (
+            <BossAlertRow key={b.id} boss={b} reason={b.alert ?? bossOneLine(b)} onOpen={onOpen} whatsapp />
+          ))}
+        </AlertGroup>
+      )}
+
+      {tab === "all" && (
+        <section>
+          <button
+            onClick={() => setHealthyOpen((o) => !o)}
+            className="w-full flex items-center justify-between p-3 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-flow" />
+              <span className="text-sm font-semibold text-flow">{healthy.length} bosses healthy. All on track.</span>
+            </div>
+            <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
+          </button>
+          {healthyOpen && (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+              {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
             </div>
           )}
-        </div>
-      </section>
+        </section>
+      )}
+    </div>
+  );
+}
 
-      <section className="rounded-2xl border border-warn/25 bg-warn/[0.02] p-4">
-        <ZoneHeader tone="warning" label="Watch" count={watch.length} hint="Concerning but not critical · top 6 shown" />
-        <div className="mt-3">
-          {watch.length === 0 ? (
-            <div className="text-[11px] text-muted-foreground italic">Nothing to watch.</div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {watch.slice(0, 6).map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="warning" onOpen={onOpen} compact />)}
-            </div>
-          )}
-        </div>
-      </section>
+function AlertSummary({ tone, label, count, hint }: { tone: "critical" | "warning" | "healthy"; label: string; count: number; hint: string }) {
+  const map = {
+    critical: { border: "border-destructive/30", bg: "bg-destructive/5", txt: "text-destructive", dot: "bg-destructive" },
+    warning: { border: "border-warn/30", bg: "bg-warn/5", txt: "text-warn", dot: "bg-warn" },
+    healthy: { border: "border-flow/30", bg: "bg-flow/5", txt: "text-flow", dot: "bg-flow" },
+  } as const;
+  const t = map[tone];
+  return (
+    <div className={`p-3 rounded-xl border ${t.border} ${t.bg}`}>
+      <div className="flex items-center gap-1.5">
+        <span className={`size-1.5 rounded-full ${t.dot}`} />
+        <span className={`text-[10px] font-bold uppercase tracking-widest ${t.txt}`}>{label}</span>
+      </div>
+      <div className={`text-2xl font-mono font-bold mt-1 ${t.txt}`}>{count}</div>
+      <div className="text-[10px] text-muted-foreground">{hint}</div>
+    </div>
+  );
+}
 
-      <section>
-        <button
-          onClick={() => setHealthyOpen((o) => !o)}
-          className="w-full flex items-center justify-between p-3 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-flow" />
-            <span className="text-sm font-semibold text-flow">{healthy.length} bosses healthy. All on track.</span>
-          </div>
-          <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
-        </button>
-        {healthyOpen && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
-            {healthy.map(({ b, score }) => <BossCard key={b.id} boss={b} score={score} sev="healthy" onOpen={onOpen} compact />)}
-          </div>
-        )}
-      </section>
+function AlertGroup({
+  tone, title, hint, empty, children,
+}: { tone: "critical" | "warning"; title: string; hint: string; empty: string; children: React.ReactNode }) {
+  const map = {
+    critical: { border: "border-destructive/25", bg: "bg-destructive/[0.02]", dot: "bg-destructive", txt: "text-destructive" },
+    warning: { border: "border-warn/25", bg: "bg-warn/[0.02]", dot: "bg-warn", txt: "text-warn" },
+  } as const;
+  const t = map[tone];
+  const arr = Array.isArray(children) ? children.flat() : [children];
+  const isEmpty = arr.filter(Boolean).length === 0;
+  return (
+    <section className={`rounded-2xl border ${t.border} ${t.bg} p-4`}>
+      <div className="flex items-center gap-2 mb-3">
+        <span className={`size-2 rounded-full ${t.dot}`} />
+        <span className={`text-[11px] font-bold uppercase tracking-widest ${t.txt}`}>{title}</span>
+        <span className="text-[10px] text-muted-foreground">· {hint}</span>
+      </div>
+      {isEmpty ? (
+        <div className="text-[11px] text-muted-foreground italic">{empty}</div>
+      ) : (
+        <div className="space-y-2">{children}</div>
+      )}
+    </section>
+  );
+}
+
+function WhatsAppBtn({ label = "Send WhatsApp nudge" }: { label?: string }) {
+  return (
+    <button className="text-[11px] font-bold px-3 py-1.5 rounded-md shrink-0 bg-flow text-white inline-flex items-center gap-1.5 hover:opacity-90 transition-opacity">
+      <svg viewBox="0 0 24 24" className="size-3.5" fill="currentColor"><path d="M17.5 14.4c-.3-.1-1.7-.8-2-.9s-.5-.1-.7.1-.8.9-.9 1.1-.3.1-.5 0-1.2-.5-2.3-1.4c-.9-.7-1.4-1.7-1.6-1.9s0-.3.1-.5l.4-.5c.1-.2.2-.3.2-.5s.1-.3 0-.5l-.7-1.7c-.2-.4-.4-.4-.6-.4h-.5c-.2 0-.5.1-.7.3-.3.3-1 1-1 2.3s1 2.7 1.1 2.9 2 3 4.7 4.2c.7.3 1.2.5 1.6.6.7.2 1.3.2 1.8.1.6-.1 1.7-.7 1.9-1.3.2-.7.2-1.2.2-1.3-.1-.2-.3-.2-.5-.3z"/></svg>
+      {label}
+    </button>
+  );
+}
+
+function ChatAlertRow({ boss, chat, onOpenBoss }: { boss: Boss; chat: CandidateChat; onOpenBoss: (b: Boss) => void }) {
+  const mins = minutesAgo(chat.lastTs);
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-destructive/30 bg-destructive/5">
+      <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(chat.candidateName)}
+      </div>
+      <button onClick={() => onOpenBoss(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {chat.candidateName} <span className="text-muted-foreground font-normal">→ {boss.name} · {boss.company}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">
+          For {chat.forRole} · last reply {fmtSince(mins)} · "{chat.lastMessage}"
+        </div>
+      </button>
+      <WhatsAppBtn />
+    </div>
+  );
+}
+
+function StuckRow({ boss, mins, onOpen }: { boss: Boss; mins: number; onOpen: (b: Boss) => void }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-warn/30 bg-warn/5">
+      <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(boss.name)}
+      </div>
+      <button onClick={() => onOpen(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">
+          Stuck in <span className="font-semibold text-foreground">{boss.stage}</span> for {fmtSince(mins)}
+        </div>
+      </button>
+      <WhatsAppBtn />
+    </div>
+  );
+}
+
+function NegativeCloseRow({ boss, chat, onOpenBoss }: { boss: Boss; chat: CandidateChat; onOpenBoss: (b: Boss) => void }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-destructive/30 bg-destructive/5">
+      <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(chat.candidateName)}
+      </div>
+      <button onClick={() => onOpenBoss(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {chat.candidateName} <span className="text-muted-foreground font-normal">→ {boss.name}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">
+          {chat.forRole} · closed {chat.lastTime} ago
+        </div>
+      </button>
+      <span className="text-[10px] font-bold px-2 py-1 rounded bg-destructive/10 text-destructive border border-destructive/20 shrink-0">
+        {chat.closeReason}
+      </span>
+    </div>
+  );
+}
+
+function BossAlertRow({ boss, reason, onOpen, whatsapp }: { boss: Boss; reason: string; onOpen: (b: Boss) => void; whatsapp?: boolean }) {
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-destructive/30 bg-destructive/5">
+      <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(boss.name)}
+      </div>
+      <button onClick={() => onOpen(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">{reason}</div>
+      </button>
+      {whatsapp && <WhatsAppBtn />}
     </div>
   );
 }
