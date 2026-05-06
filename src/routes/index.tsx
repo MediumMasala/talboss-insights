@@ -426,9 +426,11 @@ function InterviewChannelTabs({
 function TrackerPanel({
   bosses,
   onDrill,
+  onChatDrill,
 }: {
   bosses: Boss[];
   onDrill: (d: { title: string; bosses: Boss[] }) => void;
+  onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
 }) {
   const total = bosses.length || 1;
   const byStage = STAGES.map((s) => ({ stage: s, bosses: bosses.filter((b) => b.stage === s) }));
