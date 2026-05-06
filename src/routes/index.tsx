@@ -526,7 +526,29 @@ function TrackerPanel({
       {/* TODAY */}
       {tab === "today" && (
         <div className="space-y-4">
-          <SectionPanel title="What changed today" hint="5-bullet snapshot of day-over-day movement">
+          <SectionPanel title="Headline metrics · today" hint="The 4 numbers ops should know before standup">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
+              <BigMetric label="Active bosses" value={active.length} sub={`of ${bosses.length} · ${pct(active.length, total)}%`} tone="flow" series={seedSeries("active", 14, active.length * 6)} />
+              <BigMetric label="Hire rate" value={`${hireRate}%`} sub={`${totalHired} hired · ${totalNotHired} not`} tone="flow" series={seedSeries("hire", 14, hireRate)} />
+              <BigMetric label="No-reply chats" value={noReply.length} sub={`${pct(noReply.length, total)}% of bosses`} tone="warn" series={seedSeries("nr", 14, noReply.length * 6)} />
+              <BigMetric label="DM accept" value={`${dmAcceptRate}%`} sub={`${dms} of ${swipes} swipes`} series={seedSeries("dm", 14, dmAcceptRate)} />
+            </div>
+          </SectionPanel>
+
+          <SectionPanel title="Secondary metrics" hint="14-day trend per metric">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              <KPI label="Bosses" value={bosses.length} series={seedSeries("bosses", 14, bosses.length)} />
+              <KPI label="Avg intent" value={`${avgIntent}%`} series={seedSeries("intent", 14, avgIntent)} />
+              <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}%`} tone="flow" series={seedSeries("verified", 14, verified.length * 5)} />
+              <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} series={seedSeries("onboarded", 14, onboarded.length * 5)} />
+              <KPI label="Open chats" value={totalOpenChats} series={seedSeries("openchats", 14, totalOpenChats * 3)} />
+              <KPI label="Closed chats" value={totalClosedChats} series={seedSeries("closedchats", 14, totalClosedChats * 3)} />
+              <KPI label="Open roles" value={totalRoles} series={seedSeries("roles", 14, totalRoles * 4)} />
+              <KPI label="Idle" value={idle.length} series={seedSeries("idle", 14, idle.length * 4)} />
+            </div>
+          </SectionPanel>
+
+          <SectionPanel title="What changed today" hint="Day-over-day movement">
             <ul className="space-y-1.5">
               {changes.map((c, i) => (
                 <li key={i} className="flex items-start gap-2 text-[12px] text-foreground/90">
@@ -536,25 +558,16 @@ function TrackerPanel({
               ))}
             </ul>
           </SectionPanel>
-
-          <SectionPanel title="Headline metrics" hint="14-day trend per metric · click sparkline shows direction">
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-              <KPI label="Bosses" value={bosses.length} series={seedSeries("bosses", 14, bosses.length)} />
-              <KPI label="Active now" value={active.length} tone="flow" series={seedSeries("active", 14, active.length * 6)} />
-              <KPI label="No reply" value={noReply.length} tone="warn" series={seedSeries("noreply", 14, noReply.length * 6)} />
-              <KPI label="Avg intent" value={`${avgIntent}%`} series={seedSeries("intent", 14, avgIntent)} />
-              <KPI label="Verified" value={verified.length} sub={`${pct(verified.length, total)}%`} tone="flow" series={seedSeries("verified", 14, verified.length * 5)} />
-              <KPI label="Onboarded" value={onboarded.length} sub={`${pct(onboarded.length, total)}%`} series={seedSeries("onboarded", 14, onboarded.length * 5)} />
-              <KPI label="Open chats" value={totalOpenChats} series={seedSeries("openchats", 14, totalOpenChats * 3)} />
-              <KPI label="Hired" value={totalHired} tone="flow" sub={`${hireRate}% rate`} series={seedSeries("hired", 14, totalHired * 8)} />
-            </div>
-          </SectionPanel>
         </div>
       )}
 
-      {/* PIPELINE */}
-      {tab === "pipeline" && (
+      {/* FUNNEL */}
+      {tab === "funnel" && (
         <div className="space-y-4">
+          <SectionPanel title="Funnel · stages" hint="Width = bosses who reached the stage · click cleared / stuck to drill in">
+            <FunnelViz bosses={bosses} onDrill={onDrill} />
+          </SectionPanel>
+
           <SectionPanel title="Stage movement · this week" hint="Bosses that advanced from one stage to the next">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
               {moves.map((m) => (
@@ -566,30 +579,6 @@ function TrackerPanel({
                   <span className="font-semibold truncate">{m.to}</span>
                 </div>
               ))}
-            </div>
-          </SectionPanel>
-
-          <SectionPanel title="Pipeline funnel" hint={`Distribution across ${total} bosses · click a row to drill in`}>
-            <div className="space-y-1.5">
-              {byStage.map((s) => {
-                const p = Math.round((s.bosses.length / total) * 100);
-                const w = (s.bosses.length / maxStageCount) * 100;
-                return (
-                  <button
-                    key={s.stage}
-                    onClick={() => onDrill({ title: `Stage · ${s.stage}`, bosses: s.bosses })}
-                    className="w-full flex items-center gap-3 text-left group"
-                    disabled={s.bosses.length === 0}
-                  >
-                    <span className="w-24 text-[11px] font-semibold text-foreground/80 shrink-0 truncate">{s.stage}</span>
-                    <div className="flex-1 h-6 bg-surface rounded-md overflow-hidden border border-border relative">
-                      <div className="h-full bg-primary/80 group-hover:bg-primary transition-all" style={{ width: `${w}%` }} />
-                      <span className="absolute inset-0 flex items-center px-2 text-[11px] font-mono font-bold text-foreground">{s.bosses.length}</span>
-                    </div>
-                    <span className="w-12 text-right text-[11px] font-mono text-muted-foreground shrink-0">{p}%</span>
-                  </button>
-                );
-              })}
             </div>
           </SectionPanel>
         </div>
