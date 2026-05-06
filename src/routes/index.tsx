@@ -154,6 +154,36 @@ function Sparkline({ data, tone }: { data: number[]; tone?: "flow" | "warn" }) {
   );
 }
 
+/* ---------- Live tick + animated number ---------- */
+function useLiveTick(intervalMs = 3500): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return tick;
+}
+
+function jitter(seed: string, tick: number): number {
+  let s = tick + 1;
+  for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) | 0;
+  s = (s * 1103515245 + 12345) & 0x7fffffff;
+  return ((s % 201) - 100) / 100; // -1..1
+}
+
+function LiveNumber({ value, seed, kind = "int" }: { value: number; seed: string; kind?: "int" | "pct" }) {
+  const tick = useLiveTick(3500);
+  const j = jitter(seed, tick);
+  const live = kind === "pct"
+    ? Math.max(0, Math.min(100, Math.round(value + j * 1.5)))
+    : Math.max(0, Math.round(value + j * Math.max(1, value * 0.05)));
+  return (
+    <span key={live} className="tabular-nums inline-block animate-in fade-in zoom-in-95 duration-300">
+      {live}{kind === "pct" ? "%" : ""}
+    </span>
+  );
+}
+
 /* ---------- 5-dot chat journey ---------- */
 const CHAT_JOURNEY = ["Matched", "Talking", "Interview", "Offer", "Closed"] as const;
 function chatJourneyIndex(c: CandidateChat): number {
