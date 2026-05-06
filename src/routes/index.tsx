@@ -331,9 +331,10 @@ function SideNav({
   const items: { key: Section; label: string; badge?: number; tone?: "warn"; icon: React.ReactNode }[] = [
     {
       key: "overview",
-      label: "Overview",
-      badge: bossCount,
-      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>),
+      label: "Alerts",
+      badge: alerts,
+      tone: alerts > 0 ? "warn" : undefined,
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>),
     },
     {
       key: "tracker",
