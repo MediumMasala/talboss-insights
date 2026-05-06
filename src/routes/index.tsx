@@ -299,6 +299,17 @@ function Dashboard() {
           }}
         />
       )}
+      {chatDrill && (
+        <ChatDrillModal
+          title={chatDrill.title}
+          chats={chatDrill.chats}
+          onClose={() => setChatDrill(null)}
+          onOpenBoss={(b) => {
+            setChatDrill(null);
+            setSelected(b);
+          }}
+        />
+      )}
     </div>
   );
 }
