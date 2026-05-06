@@ -493,12 +493,12 @@ function TrackerPanel({
     moves.push({ from: STAGES[i], to: STAGES[i + 1], n });
   }
 
-  type TrackerTab = "today" | "pipeline" | "outcomes" | "team";
+  type TrackerTab = "today" | "funnel" | "outcomes" | "team";
   const [tab, setTab] = useState<TrackerTab>("today");
 
   const tabs: { k: TrackerTab; label: string; hint: string }[] = [
     { k: "today", label: "Today", hint: "What changed in the last 24h" },
-    { k: "pipeline", label: "Pipeline", hint: "Stages, funnel, movement" },
+    { k: "funnel", label: "Funnel", hint: "Stages, cleared vs stuck" },
     { k: "outcomes", label: "Outcomes", hint: "Hires, closes, conversion" },
     { k: "team", label: "Team", hint: "Owner load + channels" },
   ];
