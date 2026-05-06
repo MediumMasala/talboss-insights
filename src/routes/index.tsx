@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ALL_CHATS,
@@ -154,6 +154,36 @@ function Sparkline({ data, tone }: { data: number[]; tone?: "flow" | "warn" }) {
   );
 }
 
+/* ---------- Live tick + animated number ---------- */
+function useLiveTick(intervalMs = 3500): number {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => setTick((t) => t + 1), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return tick;
+}
+
+function jitter(seed: string, tick: number): number {
+  let s = tick + 1;
+  for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) | 0;
+  s = (s * 1103515245 + 12345) & 0x7fffffff;
+  return ((s % 201) - 100) / 100; // -1..1
+}
+
+function LiveNumber({ value, seed, kind = "int" }: { value: number; seed: string; kind?: "int" | "pct" }) {
+  const tick = useLiveTick(3500);
+  const j = jitter(seed, tick);
+  const live = kind === "pct"
+    ? Math.max(0, Math.min(100, Math.round(value + j * 1.5)))
+    : Math.max(0, Math.round(value + j * Math.max(1, value * 0.05)));
+  return (
+    <span key={live} className="tabular-nums inline-block animate-in fade-in zoom-in-95 duration-300">
+      {live}{kind === "pct" ? "%" : ""}
+    </span>
+  );
+}
+
 /* ---------- 5-dot chat journey ---------- */
 const CHAT_JOURNEY = ["Matched", "Talking", "Interview", "Offer", "Closed"] as const;
 function chatJourneyIndex(c: CandidateChat): number {
@@ -216,7 +246,7 @@ function Dashboard() {
   }, [filtered, stageFilter, interviewChannel]);
 
   const sectionTitle: Record<Section, string> = {
-    overview: "Alerts · what needs your attention",
+    overview: "Alerts · bosses needing attention",
     tracker: "Trackers · live analytics",
     chats: "Chats · grouped by boss",
   };
@@ -331,9 +361,10 @@ function SideNav({
   const items: { key: Section; label: string; badge?: number; tone?: "warn"; icon: React.ReactNode }[] = [
     {
       key: "overview",
-      label: "Overview",
-      badge: bossCount,
-      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>),
+      label: "Alerts",
+      badge: alerts,
+      tone: alerts > 0 ? "warn" : undefined,
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10 21a2 2 0 0 0 4 0"/></svg>),
     },
     {
       key: "tracker",
@@ -727,13 +758,20 @@ function ChannelBar({ label, value, total, tone }: { label: string; value: numbe
 }
 
 
+function renderLive(value: number | string, label: string) {
+  if (typeof value === "number") return <LiveNumber value={value} seed={label} kind="int" />;
+  const m = /^(\d+(?:\.\d+)?)%$/.exec(value);
+  if (m) return <LiveNumber value={Number(m[1])} seed={label} kind="pct" />;
+  return <>{value}</>;
+}
+
 function KPI({ label, value, sub, tone, series }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn"; series?: number[] }) {
   const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
   return (
     <div className="bg-background border border-border rounded-lg px-3 py-2">
       <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="flex items-end justify-between gap-2">
-        <div className={`text-base font-mono font-bold ${cls}`}>{value}</div>
+        <div className={`text-base font-mono font-bold ${cls}`}>{renderLive(value, label)}</div>
         {series && <Sparkline data={series} tone={tone} />}
       </div>
       {sub && <div className="text-[9px] text-muted-foreground font-mono">{sub}</div>}
@@ -745,10 +783,11 @@ function BigMetric({ label, value, sub, tone, series }: { label: string; value: 
   const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
   const border = tone === "flow" ? "border-flow/30 bg-flow/5" : tone === "warn" ? "border-warn/30 bg-warn/5" : "border-border bg-surface";
   return (
-    <div className={`rounded-xl border p-4 ${border}`}>
+    <div className={`rounded-xl border p-4 ${border} relative overflow-hidden`}>
+      <span className="absolute top-2 right-2 size-1.5 rounded-full bg-flow animate-pulse" title="Live" />
       <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="flex items-end justify-between gap-2 mt-1">
-        <div className={`text-3xl font-mono font-bold ${cls}`}>{value}</div>
+        <div className={`text-3xl font-mono font-bold ${cls}`}>{renderLive(value, label)}</div>
         {series && <Sparkline data={series} tone={tone} />}
       </div>
       {sub && <div className="text-[11px] text-muted-foreground font-mono mt-1">{sub}</div>}
@@ -1567,9 +1606,9 @@ function AlertsView({
 
   const tabs = [
     { k: "all" as const, label: "All", count: totalAlerts },
-    { k: "chats" as const, label: "Chats", count: chatNoReply.length },
-    { k: "funnel" as const, label: "Funnel", count: stuck.length + lowAccept.length },
-    { k: "outcomes" as const, label: "Outcomes", count: negativeChats.length + criticalBosses.length },
+    { k: "chats" as const, label: "Awaiting reply", count: chatNoReply.length },
+    { k: "funnel" as const, label: "Stuck bosses", count: stuck.length + lowAccept.length },
+    { k: "outcomes" as const, label: "Lost bosses", count: negativeChats.length + criticalBosses.length },
   ];
 
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
@@ -1579,14 +1618,25 @@ function AlertsView({
   const showOutcomes = tab === "all" || tab === "outcomes";
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <AlertSummary tone="critical" label="Chats no-reply >30m" count={chatNoReply.length} hint="Post-nudge window" />
-        <AlertSummary tone="warning" label="Funnel stuck >30m" count={stuck.length} hint="Same stage, no movement" />
-        <AlertSummary tone="warning" label="Negative closes" count={negativeChats.length} hint="Recent losses" />
-        <AlertSummary tone="healthy" label="Healthy bosses" count={healthy.length} hint="On track" />
+    <div className="space-y-4">
+      {/* Compact triage strip */}
+      <div className="rounded-2xl border border-border bg-surface p-3">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <span className="size-2 rounded-full bg-destructive animate-pulse" />
+            <span className="text-[11px] font-bold uppercase tracking-widest">Boss alerts · live</span>
+          </div>
+          <span className="text-[10px] text-muted-foreground font-mono">{totalAlerts} signals · {healthy.length} healthy</span>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+          <AlertSummary tone="critical" label="Bosses waiting on candidate" count={chatNoReply.length} hint="No reply &gt;30m post-nudge" />
+          <AlertSummary tone="warning" label="Bosses stuck in stage" count={stuck.length} hint="Same stage &gt;30m, no movement" />
+          <AlertSummary tone="warning" label="Bosses losing candidates" count={negativeChats.length} hint="Recent negative closes" />
+          <AlertSummary tone="critical" label="Bosses at risk" count={criticalBosses.length + lowAccept.length} hint="Unhappy, ghosted, low engagement" />
+        </div>
       </div>
 
+      {/* Tabs */}
       <div className="flex flex-wrap items-center gap-1 p-1 bg-surface border border-border rounded-lg w-fit">
         {tabs.map((t) => (
           <button
@@ -1602,11 +1652,11 @@ function AlertsView({
       </div>
 
       {showChats && (
-        <AlertGroup tone="critical" title="Chat no-reply · >30 min" hint="No reply 30m after the auto-nudge window" empty="All chats responded within window.">
-          {chatNoReply.slice(0, 8).map(({ b, c }) => (
+        <AlertGroup tone="critical" title="Bosses waiting on candidate reply" hint="Candidate hasn't responded 30m past the auto-nudge window" empty="Every boss conversation got a reply.">
+          {chatNoReply.slice(0, 6).map(({ b, c }) => (
             <ChatAlertRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
           ))}
-          {chatNoReply.length > 8 && (
+          {chatNoReply.length > 6 && (
             <button
               onClick={() => onChatDrill({ title: "Chats with no reply >30m", chats: chatNoReply.map((x) => x.c) })}
               className="text-[11px] text-primary font-semibold hover:underline"
@@ -1618,27 +1668,27 @@ function AlertsView({
       )}
 
       {showFunnel && (
-        <AlertGroup tone="warning" title="Funnel drop-off · stuck >30 min" hint="Bosses sitting in the same stage with no activity" empty="Pipeline is moving cleanly.">
-          {stuck.slice(0, 8).map(({ b, mins }) => (
+        <AlertGroup tone="warning" title="Bosses stuck in funnel stage" hint="Bosses sitting in the same stage with no movement" empty="Every boss is moving through the funnel.">
+          {stuck.slice(0, 6).map(({ b, mins }) => (
             <StuckRow key={b.id} boss={b} mins={mins} onOpen={onOpen} />
           ))}
         </AlertGroup>
       )}
 
       {showFunnel && lowAccept.length > 0 && (
-        <AlertGroup tone="warning" title="Low DM accept rate" hint="Bosses with <40% DM acceptance after 5+ swipes" empty="">
+        <AlertGroup tone="warning" title="Bosses with weak candidate engagement" hint="Less than 40% of swiped candidates are accepting boss DMs" empty="">
           {lowAccept.map((b) => (
-            <BossAlertRow key={b.id} boss={b} reason={`${Math.round((b.dmAccepted / b.swipedToDM) * 100)}% accept · ${b.swipedToDM} swipes`} onOpen={onOpen} />
+            <BossAlertRow key={b.id} boss={b} reason={`Only ${Math.round((b.dmAccepted / b.swipedToDM) * 100)}% of ${b.swipedToDM} candidates accepted boss DM`} onOpen={onOpen} />
           ))}
         </AlertGroup>
       )}
 
       {showOutcomes && (
-        <AlertGroup tone="critical" title="Negative closes · review reasons" hint="Recent chats closed with a negative outcome" empty="No negative closes.">
-          {negativeChats.slice(0, 8).map(({ b, c }) => (
+        <AlertGroup tone="critical" title="Bosses losing candidates · review reason" hint="Candidates that closed with a negative outcome on this boss" empty="No bosses lost a candidate recently.">
+          {negativeChats.slice(0, 6).map(({ b, c }) => (
             <NegativeCloseRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
           ))}
-          {negativeChats.length > 8 && (
+          {negativeChats.length > 6 && (
             <button
               onClick={() => onChatDrill({ title: "Negative closes", chats: negativeChats.map((x) => x.c) })}
               className="text-[11px] text-primary font-semibold hover:underline"
@@ -1650,7 +1700,7 @@ function AlertsView({
       )}
 
       {showOutcomes && criticalBosses.length > 0 && (
-        <AlertGroup tone="critical" title="Critical bosses" hint="Unhappy, ghosted, or stalled high-priority bosses" empty="">
+        <AlertGroup tone="critical" title="Bosses at risk" hint="Boss is unhappy, ghosted, or stalled — needs direct outreach" empty="">
           {criticalBosses.map((b) => (
             <BossAlertRow key={b.id} boss={b} reason={b.alert ?? bossOneLine(b)} onOpen={onOpen} whatsapp />
           ))}
@@ -1658,23 +1708,21 @@ function AlertsView({
       )}
 
       {tab === "all" && (
-        <section>
-          <button
-            onClick={() => setHealthyOpen((o) => !o)}
-            className="w-full flex items-center justify-between p-3 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
-          >
-            <div className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-flow" />
-              <span className="text-sm font-semibold text-flow">{healthy.length} bosses healthy. All on track.</span>
-            </div>
-            <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
-          </button>
-          {healthyOpen && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
-              {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
-            </div>
-          )}
-        </section>
+        <button
+          onClick={() => setHealthyOpen((o) => !o)}
+          className="w-full flex items-center justify-between p-2.5 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <span className="size-2 rounded-full bg-flow" />
+            <span className="text-xs font-semibold text-flow">{healthy.length} bosses healthy · no action needed</span>
+          </div>
+          <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
+        </button>
+      )}
+      {tab === "all" && healthyOpen && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+          {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
+        </div>
       )}
     </div>
   );
