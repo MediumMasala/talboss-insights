@@ -758,13 +758,20 @@ function ChannelBar({ label, value, total, tone }: { label: string; value: numbe
 }
 
 
+function renderLive(value: number | string, label: string) {
+  if (typeof value === "number") return <LiveNumber value={value} seed={label} kind="int" />;
+  const m = /^(\d+(?:\.\d+)?)%$/.exec(value);
+  if (m) return <LiveNumber value={Number(m[1])} seed={label} kind="pct" />;
+  return <>{value}</>;
+}
+
 function KPI({ label, value, sub, tone, series }: { label: string; value: number | string; sub?: string; tone?: "flow" | "warn"; series?: number[] }) {
   const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
   return (
     <div className="bg-background border border-border rounded-lg px-3 py-2">
       <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="flex items-end justify-between gap-2">
-        <div className={`text-base font-mono font-bold ${cls}`}>{value}</div>
+        <div className={`text-base font-mono font-bold ${cls}`}>{renderLive(value, label)}</div>
         {series && <Sparkline data={series} tone={tone} />}
       </div>
       {sub && <div className="text-[9px] text-muted-foreground font-mono">{sub}</div>}
@@ -776,10 +783,11 @@ function BigMetric({ label, value, sub, tone, series }: { label: string; value: 
   const cls = tone === "flow" ? "text-flow" : tone === "warn" ? "text-warn" : "text-foreground";
   const border = tone === "flow" ? "border-flow/30 bg-flow/5" : tone === "warn" ? "border-warn/30 bg-warn/5" : "border-border bg-surface";
   return (
-    <div className={`rounded-xl border p-4 ${border}`}>
+    <div className={`rounded-xl border p-4 ${border} relative overflow-hidden`}>
+      <span className="absolute top-2 right-2 size-1.5 rounded-full bg-flow animate-pulse" title="Live" />
       <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
       <div className="flex items-end justify-between gap-2 mt-1">
-        <div className={`text-3xl font-mono font-bold ${cls}`}>{value}</div>
+        <div className={`text-3xl font-mono font-bold ${cls}`}>{renderLive(value, label)}</div>
         {series && <Sparkline data={series} tone={tone} />}
       </div>
       {sub && <div className="text-[11px] text-muted-foreground font-mono mt-1">{sub}</div>}
