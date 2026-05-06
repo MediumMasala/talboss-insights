@@ -829,6 +829,68 @@ function DrillModal({
   );
 }
 
+/* ---------- Chat drill modal ---------- */
+function ChatDrillModal({
+  title,
+  chats,
+  onClose,
+  onOpenBoss,
+}: {
+  title: string;
+  chats: CandidateChat[];
+  onClose: () => void;
+  onOpenBoss: (b: Boss) => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal>
+      <div className="absolute inset-0 bg-background/70 backdrop-blur-sm animate-fade-in" onClick={onClose} />
+      <div className="relative w-full max-w-xl max-h-[80dvh] bg-surface border border-border rounded-2xl shadow-xl overflow-hidden animate-fade-in flex flex-col">
+        <div className="p-4 border-b border-border flex items-center justify-between">
+          <div>
+            <h3 className="font-semibold text-sm">{title}</h3>
+            <p className="text-[11px] text-muted-foreground">{chats.length} chats</p>
+          </div>
+          <button onClick={onClose} className="size-8 rounded-md border border-border hover:bg-surface-elevated text-muted-foreground">✕</button>
+        </div>
+        <div className="overflow-y-auto divide-y divide-border">
+          {chats.length === 0 && (
+            <div className="p-8 text-center text-sm text-muted-foreground">No chats in this segment.</div>
+          )}
+          {chats.map((c) => {
+            const boss = bossById(c.bossId);
+            const isPos = c.closeReason && POSITIVE_CLOSE.includes(c.closeReason);
+            return (
+              <button
+                key={c.id}
+                onClick={() => boss && onOpenBoss(boss)}
+                className="w-full flex items-center gap-3 p-3 text-left hover:bg-surface-elevated transition-colors"
+              >
+                <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold border border-primary/20">
+                  {initials(c.candidateName)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">
+                    {c.candidateName} <span className="text-muted-foreground font-normal">→ {boss?.name}</span>
+                  </div>
+                  <div className="text-[11px] text-muted-foreground truncate">{c.forRole} · {c.lastMessage}</div>
+                </div>
+                {c.closeReason && (
+                  <span className={`text-[9px] px-2 py-0.5 rounded border whitespace-nowrap ${
+                    isPos ? "bg-flow/10 text-flow border-flow/20" : "bg-warn/10 text-warn border-warn/20"
+                  }`}>
+                    {c.closeReason}
+                  </span>
+                )}
+                <span className="text-[10px] font-mono text-muted-foreground">{c.lastTime}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /* ---------- Header ---------- */
 function Header({
   view,
