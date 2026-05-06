@@ -276,10 +276,10 @@ function Dashboard() {
           )}
 
           {section === "overview" && (
-            <OverviewZones bosses={interviewFiltered} onOpen={setSelected} />
+            <AlertsView bosses={interviewFiltered} onOpen={setSelected} onChatDrill={setChatDrill} />
           )}
           {section === "tracker" && (
-            <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} />
+            <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} onChatDrill={setChatDrill} />
           )}
           {section === "chats" && (
             <ChatStream bosses={interviewFiltered} onOpenBoss={setSelected} />
