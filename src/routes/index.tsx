@@ -1831,20 +1831,23 @@ function AlertsView({
         </div>
       )}
 
-      {/* Compact triage strip — boss-perspective */}
+      {/* What changed today + 4-card live grid */}
       <div className="rounded-2xl border border-border bg-surface p-3">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-destructive animate-pulse" />
-            <span className="text-[11px] font-bold uppercase tracking-widest">Boss alerts · live</span>
+            <span className="size-1.5 rounded-full bg-destructive animate-pulse" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">What changed today</span>
+            <span className="text-[11px] text-foreground/80 truncate">
+              {bossOwes.length} boss{bossOwes.length === 1 ? "" : "es"} owe a reply · {stuckRaw.length} stuck · {healthy.length} healthy
+            </span>
           </div>
-          <span className="text-[10px] text-muted-foreground font-mono">{totalAlerts} signals · {healthy.length} healthy</span>
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0">{totalAlerts} live signals</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <AlertSummary tone="critical" label="Boss hasn't replied" count={bossOwes.length} hint="Boss owes candidate a reply &gt;30m" />
-          <AlertSummary tone="warning" label="Candidate hasn't replied" count={candOwes.length} hint="Boss waiting on candidate &gt;30m" />
-          <AlertSummary tone="warning" label="Bosses stuck in funnel" count={stuckRaw.length} hint="Same stage &gt;30m, no movement" />
-          <AlertSummary tone="critical" label="Bosses losing / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" />
+          <AlertSummary tone="critical" label="No reply" count={bossOwes.length + candOwes.length} hint={`${bossOwes.length} boss · ${candOwes.length} candidate · >30m`} delta={+2} />
+          <AlertSummary tone="warning" label="Stuck in funnel" count={stuckRaw.length} hint="Same stage >30m, no movement" delta={+1} />
+          <AlertSummary tone="critical" label="Lost / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" delta={-1} />
+          <AlertSummary tone="healthy" label="Healthy" count={healthy.length} hint="Active, replying, sentiment good" delta={+3} />
         </div>
       </div>
 
