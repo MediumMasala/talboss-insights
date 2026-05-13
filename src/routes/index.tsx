@@ -1126,17 +1126,22 @@ function Header({
         </div>
 
         <nav className="flex p-1 bg-surface rounded-full border border-border" aria-label="View">
-          {(["all", "mine"] as View[]).map((v) => (
+          {(["mine", "admin"] as View[]).map((v) => (
             <button
               key={v}
               onClick={() => setView(v)}
-              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all ${
+              title={v === "mine" ? "Only bosses assigned to you — focus mode" : "Read-only org-wide overview · limited access"}
+              className={`px-4 py-1.5 rounded-full text-sm font-semibold transition-all flex items-center gap-1.5 ${
                 view === v
                   ? "bg-surface-elevated text-foreground"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {v === "all" ? "All view" : `My view · ${me}`}
+              {v === "mine" ? (
+                <>My view <span className="text-[10px] font-mono opacity-70">· {me}</span></>
+              ) : (
+                <>Admin view <span className="text-[9px] font-bold uppercase tracking-wider px-1 py-0.5 rounded bg-warn/15 text-warn">read-only</span></>
+              )}
             </button>
           ))}
         </nav>
