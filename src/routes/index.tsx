@@ -31,8 +31,53 @@ export const Route = createFileRoute("/")({
   }),
 });
 
-type View = "all" | "mine";
+type View = "mine" | "admin";
 type SearchScope = "all" | "name" | "company" | "id" | "location" | "owner";
+
+/* ---------- Funnel stage playbooks (steps to follow per stage) ---------- */
+const STAGE_STEPS: Record<Stage, string[]> = {
+  Onboarding: ["Welcome DM sent", "Profile draft started", "First role drafted", "WhatsApp opt-in"],
+  Verification: ["LinkedIn checked", "Work email verified", "Company doc received", "Verified badge granted"],
+  "Job Creation": ["JD drafted", "Comp band set", "Location & type set", "Role published live"],
+  Talking: ["DM sent to candidate", "Auto-nudge sent (15m)", "WhatsApp sent (30m)", "Ops call attempted"],
+  Interview: ["Round scheduled", "Interviewer briefed", "Feedback collected", "Decision shared"],
+  Hiring: ["Offer drafted", "Comp aligned", "Verbal accepted", "Written offer sent"],
+  Closing: ["Offer accepted", "Joining date locked", "BGV initiated", "Onboarded ✓"],
+};
+
+// Deterministic "done" ticks per boss/stage so demo feels real
+function stepsDone(boss: Boss, stage: Stage): boolean[] {
+  const steps = STAGE_STEPS[stage];
+  let h = 0;
+  const seed = boss.id + stage;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) | 0;
+  const stageIdx = STAGES.indexOf(stage);
+  const bossStageIdx = STAGES.indexOf(boss.stage);
+  // If boss has moved past this stage, all done
+  if (bossStageIdx > stageIdx) return steps.map(() => true);
+  // If not yet reached, none done
+  if (bossStageIdx < stageIdx) return steps.map(() => false);
+  // At this stage — partial, deterministic
+  const done = (Math.abs(h) % steps.length);
+  return steps.map((_, i) => i <= done - 1);
+}
+
+/* ---------- Boss-side "not replying" detection ---------- */
+function lastNonSystemFrom(c: CandidateChat): "boss" | "candidate" | "ops" | null {
+  if (!c.messages) return null;
+  for (let i = c.messages.length - 1; i >= 0; i--) {
+    const f = c.messages[i].from;
+    if (f !== "system") return f;
+  }
+  return null;
+}
+
+// Boss owes a reply: last meaningful msg is from candidate or ops, and it's been a while
+function bossOwesReply(c: CandidateChat): boolean {
+  if (c.status !== "open") return false;
+  const f = lastNonSystemFrom(c);
+  return f === "candidate" || f === "ops";
+}
 
 const statusMeta: Record<ChatStatus, { label: string; dot: string; text: string }> = {
   active: { label: "Active", dot: "bg-flow shadow-[0_0_8px_var(--color-flow)]", text: "text-flow" },
