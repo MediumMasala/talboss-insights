@@ -1759,7 +1759,7 @@ function AlertsView({
   onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
   readOnly?: boolean;
 }) {
-  type TabK = "all" | "boss_owe" | "cand_owe" | "stuck" | "lost" | Stage;
+  type TabK = "all" | "no_reply" | "stuck" | "lost" | "happy" | Stage;
   const [tab, setTab] = useState<TabK>("all");
 
   const NO_REPLY_MIN = 30;
