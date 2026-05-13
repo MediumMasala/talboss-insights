@@ -36,13 +36,13 @@ type SearchScope = "all" | "name" | "company" | "id" | "location" | "owner";
 
 /* ---------- Funnel stage playbooks (steps to follow per stage) ---------- */
 const STAGE_STEPS: Record<Stage, string[]> = {
-  Onboarding: ["Welcome DM sent", "Profile draft started", "First role drafted", "WhatsApp opt-in"],
-  Verification: ["LinkedIn checked", "Work email verified", "Company doc received", "Verified badge granted"],
-  "Job Creation": ["JD drafted", "Comp band set", "Location & type set", "Role published live"],
-  Talking: ["DM sent to candidate", "Auto-nudge sent (15m)", "WhatsApp sent (30m)", "Ops call attempted"],
-  Interview: ["Round scheduled", "Interviewer briefed", "Feedback collected", "Decision shared"],
-  Hiring: ["Offer drafted", "Comp aligned", "Verbal accepted", "Written offer sent"],
-  Closing: ["Offer accepted", "Joining date locked", "BGV initiated", "Onboarded ✓"],
+  Onboarding: ["App installed", "Phone & email confirmed", "Company & role added", "Profile photo uploaded"],
+  Verification: ["LinkedIn URL submitted", "Work email verified (OTP)", "Company domain matched", "Verified badge granted"],
+  "Job Creation": ["Role title & seniority set", "JD written (≥80 words)", "Comp & location set", "Role published to candidates"],
+  Talking: ["Boss DM sent to shortlist", "Candidate accepted DM", "Reply within 2h", "Call / interview proposed"],
+  Interview: ["Interview slot confirmed", "Interviewer brief shared", "Interview completed", "Feedback submitted ≤24h"],
+  Hiring: ["Offer terms aligned with boss", "Offer letter generated", "Candidate verbal accept", "Written offer sent"],
+  Closing: ["Offer accepted in app", "Joining date locked", "BGV started", "Candidate marked onboarded"],
 };
 
 // Deterministic "done" ticks per boss/stage so demo feels real
