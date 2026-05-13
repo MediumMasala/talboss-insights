@@ -1662,11 +1662,15 @@ function parseQuery(q: string): { filters: GPTFilters; summary: string } {
   else if (/\btracker|funnel|pipeline|analytic/.test(lower)) { f.section = "tracker"; tokens.push("→ trackers"); }
   else if (/\balert|risk|stuck\b/.test(lower)) { f.section = "overview"; tokens.push("→ alerts"); }
 
-  // free-text search of likely company/name (anything in quotes)
+  // free-text search — quoted string, or whole query if nothing else inferred
   const m = q.match(/"([^"]+)"/);
   if (m) { f.search = m[1]; tokens.push(`search "${m[1]}"`); }
+  else if (tokens.length === 0 && q.trim().length >= 2) {
+    f.search = q.trim();
+    tokens.push(`search "${q.trim()}"`);
+  }
 
-  return { filters: f, summary: tokens.length ? tokens.join(" · ") : "couldn't infer filters — try: \"unhappy bosses in talking\"" };
+  return { filters: f, summary: tokens.length ? tokens.join(" · ") : "type a boss name, company, or try: \"unhappy bosses in talking\"" };
 }
 
 function BossGPT({ bosses, onApply }: { bosses: Boss[]; onApply: (f: GPTFilters) => void }) {
