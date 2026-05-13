@@ -1162,67 +1162,7 @@ function Header({
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Scoped search */}
-        <div className="relative flex items-center bg-surface border border-border rounded-lg focus-within:ring-1 focus-within:ring-ring">
-          <button
-            onClick={() => setScopeOpen((o) => !o)}
-            className="flex items-center gap-1 pl-2.5 pr-2 h-9 text-[11px] font-semibold text-primary hover:text-primary/80 border-r border-border rounded-l-lg"
-            title="Choose what to search by"
-          >
-            <span className="uppercase tracking-wider">{scopeLabel[scope]}</span>
-            <svg className={`size-3 transition-transform ${scopeOpen ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
-          <svg
-            className="ml-2.5 size-4 text-muted-foreground pointer-events-none shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            type="text"
-            placeholder={scopePlaceholder[scope]}
-            className="w-72 bg-transparent py-2 pl-2 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none"
-          />
-          {scopeOpen && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setScopeOpen(false)} />
-              <div className="absolute top-full left-0 mt-1 z-40 w-64 bg-surface border border-border rounded-lg shadow-xl overflow-hidden">
-                <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-muted-foreground border-b border-border bg-surface-elevated/40">
-                  Search by…
-                </div>
-                {(Object.keys(scopeLabel) as SearchScope[]).map((k) => {
-                  const active = scope === k;
-                  return (
-                    <button
-                      key={k}
-                      onClick={() => {
-                        setScope(k);
-                        setScopeOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 hover:bg-surface-elevated flex items-center justify-between gap-2 ${
-                        active ? "bg-surface-elevated" : ""
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className={`text-xs font-semibold ${active ? "text-primary" : "text-foreground"}`}>
-                          {scopeLabel[k]}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground truncate">{scopeHint[k]}</div>
-                      </div>
-                      {active && <span className="text-primary text-xs">✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
+        {/* Top scoped search removed — single search lives in the Ask TalBoss bar below */}
 
         {alerts > 0 && (
           <button
