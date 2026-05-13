@@ -337,6 +337,20 @@ function Dashboard() {
         <ActivityTicker bosses={BOSSES} />
 
         <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
+          <GoalBanner view={view} me={me} bosses={interviewFiltered} />
+
+          <BossGPT
+            bosses={interviewFiltered}
+            onApply={(f) => {
+              if (f.stage !== undefined) setStageFilter(f.stage);
+              if (f.status !== undefined) setStatusFilter(f.status);
+              if (f.sentiment !== undefined) setSentimentFilter(f.sentiment);
+              if (f.verifiedOnly !== undefined) setVerifiedOnly(f.verifiedOnly);
+              if (f.section !== undefined) setSection(f.section);
+              if (f.search !== undefined) setSearch(f.search);
+            }}
+          />
+
           <SectionHeader
             title={sectionTitle[section]}
             subtitle={
@@ -351,7 +365,7 @@ function Dashboard() {
           )}
 
           {section === "overview" && (
-            <AlertsView bosses={interviewFiltered} onOpen={setSelected} onChatDrill={setChatDrill} />
+            <AlertsView bosses={interviewFiltered} onOpen={setSelected} onChatDrill={setChatDrill} readOnly={view === "admin"} />
           )}
           {section === "tracker" && (
             <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} onChatDrill={setChatDrill} />
