@@ -363,7 +363,7 @@ function Dashboard() {
           )}
 
           {section === "overview" && (
-            <AlertsView bosses={interviewFiltered} onOpen={setSelected} onChatDrill={setChatDrill} readOnly={view === "admin"} />
+            <AlertsView bosses={interviewFiltered} onOpen={setSelected} onChatDrill={setChatDrill} readOnly={view === "admin"} stageFilter={stageFilter} />
           )}
           {section === "tracker" && (
             <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} onChatDrill={setChatDrill} />
