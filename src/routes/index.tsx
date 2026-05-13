@@ -1805,10 +1805,10 @@ function AlertsView({
 
   const baseTabs: { k: TabK; label: string; count: number; tone?: "warn" | "critical" }[] = [
     { k: "all", label: "All", count: totalAlerts },
-    { k: "boss_owe", label: "Boss not replied", count: bossOwes.length, tone: "critical" },
-    { k: "cand_owe", label: "Candidate not replied", count: candOwes.length },
-    { k: "stuck", label: "Stuck bosses", count: stuckRaw.length },
+    { k: "no_reply", label: "No reply", count: bossOwes.length + candOwes.length, tone: "critical" },
+    { k: "stuck", label: "Stuck", count: stuckRaw.length },
     { k: "lost", label: "Lost / at risk", count: negativeChats.length + criticalBosses.length },
+    { k: "happy", label: "Happy", count: healthy.length },
   ];
   const stageTabs: { k: TabK; label: string; count: number }[] = STAGES.map((s) => ({
     k: s as TabK,
