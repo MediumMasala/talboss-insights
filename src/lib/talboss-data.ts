@@ -587,6 +587,48 @@ BOSSES[7].candidateChats = mkChat("GR-44102", [
   { candidateName: "Nidhi A", candidateRole: "Recruiter", forRole: "Talent Partner", status: "open", chatStatus: "idle", lastMessage: "Intro sent.", lastTime: "1d", lastTs: day(1) },
 ]);
 
+BOSSES[8].candidateChats = mkChat("GR-66501", [
+  { candidateName: "Aman Bhat", candidateRole: "Backend", forRole: "Backend Engineer", status: "open", chatStatus: "active", lastMessage: "Sending availability.", lastTime: "22m", lastTs: min(22) },
+  { candidateName: "Riya Shah", candidateRole: "Backend", forRole: "Backend Engineer", status: "open", chatStatus: "active", lastMessage: "Final round done.", lastTime: "2h", lastTs: hr(2) },
+  { candidateName: "Vivek Nag", candidateRole: "Backend", forRole: "Backend Engineer", status: "closed", chatStatus: "closed", closeReason: "Hired", lastMessage: "Joined.", lastTime: "1w", lastTs: day(7) },
+]);
+BOSSES[9].candidateChats = mkChat("GR-66502", [
+  { candidateName: "Sana Vora", candidateRole: "PM", forRole: "Senior PM", status: "open", chatStatus: "active", lastMessage: "Onsite Fri.", lastTime: "1h", lastTs: hr(1) },
+  { candidateName: "Rahul Bose", candidateRole: "PM", forRole: "Senior PM", status: "open", chatStatus: "idle", lastMessage: "Awaiting feedback.", lastTime: "1d", lastTs: day(1) },
+]);
+BOSSES[10].candidateChats = mkChat("GR-66503", [
+  { candidateName: "Aman B", candidateRole: "Platform", forRole: "Platform Eng", status: "open", chatStatus: "no_reply", lastMessage: "Shared resume — awaiting boss.", lastTime: "2d", lastTs: day(2) },
+  { candidateName: "Sneha Pal", candidateRole: "Platform", forRole: "Platform Eng", status: "open", chatStatus: "no_reply", lastMessage: "Following up.", lastTime: "1d", lastTs: day(1) },
+]);
+BOSSES[11].candidateChats = mkChat("GR-66504", [
+  { candidateName: "Tara M", candidateRole: "Eng", forRole: "Founding Eng", status: "open", chatStatus: "idle", lastMessage: "Awaiting boss.", lastTime: "3d", lastTs: day(3) },
+]);
+BOSSES[12].candidateChats = mkChat("GR-66505", [
+  { candidateName: "Vikas Rao", candidateRole: "SRE", forRole: "SRE", status: "open", chatStatus: "active", lastMessage: "Offer in review.", lastTime: "30m", lastTs: min(30), pinned: true },
+  { candidateName: "Nina K", candidateRole: "SRE", forRole: "SRE", status: "closed", chatStatus: "closed", closeReason: "Hired", lastMessage: "Joined.", lastTime: "1w", lastTs: day(7) },
+]);
+BOSSES[13].candidateChats = mkChat("GR-66506", [
+  { candidateName: "Esha N", candidateRole: "Designer", forRole: "Sr Designer", status: "open", chatStatus: "no_reply", lastMessage: "Portfolio sent — awaiting feedback.", lastTime: "1d", lastTs: day(1) },
+  { candidateName: "Mira J", candidateRole: "Designer", forRole: "Sr Designer", status: "open", chatStatus: "active", lastMessage: "Loved the brief.", lastTime: "3h", lastTs: hr(3) },
+]);
+BOSSES[14].candidateChats = mkChat("GR-66507", [
+  { candidateName: "Arjun K", candidateRole: "MLE", forRole: "ML Eng", status: "open", chatStatus: "active", lastMessage: "Counter accepted!", lastTime: "10m", lastTs: min(10), pinned: true },
+  { candidateName: "Tia P", candidateRole: "MLE", forRole: "ML Eng", status: "closed", chatStatus: "closed", closeReason: "Hired", lastMessage: "Joined.", lastTime: "2w", lastTs: day(14) },
+]);
+BOSSES[16].candidateChats = mkChat("GR-66509", [
+  { candidateName: "Hannah Lee", candidateRole: "Talent", forRole: "Talent Lead", status: "open", chatStatus: "no_reply", lastMessage: "Reaching out again.", lastTime: "4d", lastTs: day(4) },
+  { candidateName: "Owen P", candidateRole: "Talent", forRole: "Talent Lead", status: "closed", chatStatus: "closed", closeReason: "Candidate ghosted", lastMessage: "—", lastTime: "1w", lastTs: day(7) },
+]);
+BOSSES[17].candidateChats = mkChat("GR-66510", [
+  { candidateName: "Layla H", candidateRole: "PM", forRole: "Group PM", status: "open", chatStatus: "active", lastMessage: "Panel debrief tmrw.", lastTime: "45m", lastTs: min(45) },
+  { candidateName: "Yusuf M", candidateRole: "PM", forRole: "Group PM", status: "open", chatStatus: "active", lastMessage: "Sending case study.", lastTime: "2h", lastTs: hr(2) },
+  { candidateName: "Reem A", candidateRole: "PM", forRole: "Group PM", status: "closed", chatStatus: "closed", closeReason: "Hired", lastMessage: "Joined.", lastTime: "2w", lastTs: day(14) },
+]);
+BOSSES[19].candidateChats = mkChat("GR-66512", [
+  { candidateName: "Jay K", candidateRole: "Designer", forRole: "Founding Designer", status: "open", chatStatus: "active", lastMessage: "Loving the speed.", lastTime: "15m", lastTs: min(15), pinned: true },
+  { candidateName: "Sara V", candidateRole: "Designer", forRole: "Founding Designer", status: "closed", chatStatus: "closed", closeReason: "Hired", lastMessage: "Joined.", lastTime: "1w", lastTs: day(7) },
+]);
+
 // Synthesize candidate profile + full message thread for every chat
 const LOCS = ["Bengaluru", "Mumbai", "Delhi", "Pune", "Remote", "Hyderabad", "Berlin", "London", "Tokyo"];
 const COS = ["Razorpay", "Swiggy", "Stripe", "Notion", "Atlassian", "Flipkart", "Zomato", "CRED", "PhonePe"];
