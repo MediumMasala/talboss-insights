@@ -2144,20 +2144,39 @@ function BossOweRow({ boss, chat, onOpenBoss, readOnly }: { boss: Boss; chat: Ca
   );
 }
 
-function AlertSummary({ tone, label, count, hint }: { tone: "critical" | "warning" | "healthy"; label: string; count: number; hint: string }) {
+function AlertSummary({ tone, label, count, hint, delta }: { tone: "critical" | "warning" | "healthy"; label: string; count: number; hint: string; delta?: number }) {
   const map = {
     critical: { border: "border-destructive/30", bg: "bg-destructive/5", txt: "text-destructive", dot: "bg-destructive" },
     warning: { border: "border-warn/30", bg: "bg-warn/5", txt: "text-warn", dot: "bg-warn" },
     healthy: { border: "border-flow/30", bg: "bg-flow/5", txt: "text-flow", dot: "bg-flow" },
   } as const;
   const t = map[tone];
+  // For deltas: on red cards, up = bad; on healthy card, up = good
+  const isHealthy = tone === "healthy";
+  const deltaTone =
+    delta === undefined || delta === 0 ? "text-muted-foreground" :
+    (isHealthy ? (delta > 0 ? "text-flow" : "text-destructive") : (delta > 0 ? "text-destructive" : "text-flow"));
+  const sparkSeed = `${label}-${count}`;
+  const series = seedSeries(sparkSeed, 14, Math.max(2, count));
   return (
-    <div className={`p-3 rounded-xl border ${t.border} ${t.bg}`}>
+    <div className={`p-3 rounded-xl border ${t.border} ${t.bg} flex flex-col gap-1`}>
       <div className="flex items-center gap-1.5">
         <span className={`size-1.5 rounded-full ${t.dot}`} />
         <span className={`text-[10px] font-bold uppercase tracking-widest ${t.txt}`}>{label}</span>
       </div>
-      <div className={`text-2xl font-mono font-bold mt-1 ${t.txt}`}>{count}</div>
+      <div className="flex items-end justify-between gap-2">
+        <div className={`text-2xl font-mono font-bold ${t.txt}`}>{count}</div>
+        <div className="flex flex-col items-end gap-0.5">
+          {delta !== undefined && (
+            <span className={`text-[10px] font-mono font-bold ${deltaTone}`}>
+              {delta > 0 ? "↑" : delta < 0 ? "↓" : "·"} {Math.abs(delta)} vs yesterday
+            </span>
+          )}
+          <div className="w-16 h-5 opacity-80">
+            <Sparkline data={series} tone={isHealthy ? "flow" : "warn"} />
+          </div>
+        </div>
+      </div>
       <div className="text-[10px] text-muted-foreground">{hint}</div>
     </div>
   );
