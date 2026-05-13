@@ -1751,14 +1751,17 @@ function AlertsView({
   onOpen,
   onChatDrill,
   readOnly,
+  stageFilter,
 }: {
   bosses: Boss[];
   onOpen: (b: Boss) => void;
   onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
   readOnly?: boolean;
+  stageFilter?: Stage | "all";
 }) {
-  type TabK = "all" | "no_reply" | "stuck" | "lost" | "happy" | Stage;
+  type TabK = "all" | "no_reply" | "stuck" | "lost" | "happy";
   const [tab, setTab] = useState<TabK>("all");
+  const stageDrilldown: Stage | null = stageFilter && stageFilter !== "all" ? stageFilter : null;
 
   const NO_REPLY_MIN = 30;
 
