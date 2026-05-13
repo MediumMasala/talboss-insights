@@ -36,13 +36,13 @@ type SearchScope = "all" | "name" | "company" | "id" | "location" | "owner";
 
 /* ---------- Funnel stage playbooks (steps to follow per stage) ---------- */
 const STAGE_STEPS: Record<Stage, string[]> = {
-  Onboarding: ["Welcome DM sent", "Profile draft started", "First role drafted", "WhatsApp opt-in"],
-  Verification: ["LinkedIn checked", "Work email verified", "Company doc received", "Verified badge granted"],
-  "Job Creation": ["JD drafted", "Comp band set", "Location & type set", "Role published live"],
-  Talking: ["DM sent to candidate", "Auto-nudge sent (15m)", "WhatsApp sent (30m)", "Ops call attempted"],
-  Interview: ["Round scheduled", "Interviewer briefed", "Feedback collected", "Decision shared"],
-  Hiring: ["Offer drafted", "Comp aligned", "Verbal accepted", "Written offer sent"],
-  Closing: ["Offer accepted", "Joining date locked", "BGV initiated", "Onboarded ✓"],
+  Onboarding: ["App installed", "Phone & email confirmed", "Company & role added", "Profile photo uploaded"],
+  Verification: ["LinkedIn URL submitted", "Work email verified (OTP)", "Company domain matched", "Verified badge granted"],
+  "Job Creation": ["Role title & seniority set", "JD written (≥80 words)", "Comp & location set", "Role published to candidates"],
+  Talking: ["Boss DM sent to shortlist", "Candidate accepted DM", "Reply within 2h", "Call / interview proposed"],
+  Interview: ["Interview slot confirmed", "Interviewer brief shared", "Interview completed", "Feedback submitted ≤24h"],
+  Hiring: ["Offer terms aligned with boss", "Offer letter generated", "Candidate verbal accept", "Written offer sent"],
+  Closing: ["Offer accepted in app", "Joining date locked", "BGV started", "Candidate marked onboarded"],
 };
 
 // Deterministic "done" ticks per boss/stage so demo feels real
@@ -334,8 +334,6 @@ function Dashboard() {
           count={interviewFiltered.length}
         />
 
-        <ActivityTicker bosses={BOSSES} />
-
         <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
           {/* Goal banner removed per ops feedback */}
 
@@ -365,7 +363,7 @@ function Dashboard() {
           )}
 
           {section === "overview" && (
-            <AlertsView bosses={interviewFiltered} onOpen={setSelected} onChatDrill={setChatDrill} readOnly={view === "admin"} />
+            <AlertsView bosses={interviewFiltered} onOpen={setSelected} onChatDrill={setChatDrill} readOnly={view === "admin"} stageFilter={stageFilter} />
           )}
           {section === "tracker" && (
             <TrackerPanel bosses={interviewFiltered} onDrill={setTrackerDrill} onChatDrill={setChatDrill} />
@@ -1753,14 +1751,17 @@ function AlertsView({
   onOpen,
   onChatDrill,
   readOnly,
+  stageFilter,
 }: {
   bosses: Boss[];
   onOpen: (b: Boss) => void;
   onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
   readOnly?: boolean;
+  stageFilter?: Stage | "all";
 }) {
-  type TabK = "all" | "no_reply" | "stuck" | "lost" | "happy" | Stage;
+  type TabK = "all" | "no_reply" | "stuck" | "lost" | "happy";
   const [tab, setTab] = useState<TabK>("all");
+  const stageDrilldown: Stage | null = stageFilter && stageFilter !== "all" ? stageFilter : null;
 
   const NO_REPLY_MIN = 30;
 
@@ -1810,15 +1811,8 @@ function AlertsView({
     { k: "lost", label: "Lost / at risk", count: negativeChats.length + criticalBosses.length },
     { k: "happy", label: "Happy", count: healthy.length },
   ];
-  const stageTabs: { k: TabK; label: string; count: number }[] = STAGES.map((s) => ({
-    k: s as TabK,
-    label: s,
-    count: stuckByStage[s].length,
-  }));
-
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
 
-  const isStageTab = (STAGES as string[]).includes(tab as string);
   const showAll = tab === "all";
 
   return (
@@ -1831,47 +1825,27 @@ function AlertsView({
         </div>
       )}
 
-      {/* What changed today + 4-card live grid */}
-      <div className="rounded-2xl border border-border bg-surface p-3">
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-destructive animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">What changed today</span>
-            <span className="text-[11px] text-foreground/80 truncate">
-              {bossOwes.length} boss{bossOwes.length === 1 ? "" : "es"} owe a reply · {stuckRaw.length} stuck · {healthy.length} healthy
-            </span>
-          </div>
-          <span className="text-[10px] text-muted-foreground font-mono shrink-0">{totalAlerts} live signals</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <AlertSummary tone="critical" label="No reply" count={bossOwes.length + candOwes.length} hint={`${bossOwes.length} boss · ${candOwes.length} candidate · >30m`} delta={+2} />
-          <AlertSummary tone="warning" label="Stuck in funnel" count={stuckRaw.length} hint="Same stage >30m, no movement" delta={+1} />
-          <AlertSummary tone="critical" label="Lost / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" delta={-1} />
-          <AlertSummary tone="healthy" label="Healthy" count={healthy.length} hint="Active, replying, sentiment good" delta={+3} />
-        </div>
+      {/* Compact alert summary — 4 cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <AlertSummary tone="critical" label="No reply" count={bossOwes.length + candOwes.length} hint={`${bossOwes.length} boss · ${candOwes.length} candidate · >30m`} delta={+2} />
+        <AlertSummary tone="warning" label="Stuck in funnel" count={stuckRaw.length} hint="Same stage >30m, no movement" delta={+1} />
+        <AlertSummary tone="critical" label="Lost / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" delta={-1} />
+        <AlertSummary tone="healthy" label="Healthy" count={healthy.length} hint="Active, replying, sentiment good" delta={+3} />
       </div>
 
-      {/* Two-row tabs: alert categories + funnel stages */}
-      <div className="space-y-2">
-        <TabBar
-          label="By signal"
-          tabs={baseTabs}
-          current={tab}
-          onChange={setTab}
-        />
-        <TabBar
-          label="By funnel stage"
-          tabs={stageTabs}
-          current={tab}
-          onChange={setTab}
-        />
-      </div>
+      {/* Single tab row — by signal. Use the global Filters bar above for stage/team/vibe. */}
+      <TabBar
+        label="View"
+        tabs={baseTabs}
+        current={tab}
+        onChange={setTab}
+      />
 
-      {/* Stage drilldown: bosses stuck in this stage + steps checklist */}
-      {isStageTab && (
+      {/* Stage drilldown only when a stage is selected via Filters bar */}
+      {stageDrilldown && (
         <StageDrilldown
-          stage={tab as Stage}
-          rows={stuckByStage[tab as Stage]}
+          stage={stageDrilldown}
+          rows={stuckByStage[stageDrilldown]}
           onOpen={onOpen}
           readOnly={readOnly}
         />
