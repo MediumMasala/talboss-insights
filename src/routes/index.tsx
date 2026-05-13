@@ -1637,24 +1637,44 @@ function AlertsView({
   bosses,
   onOpen,
   onChatDrill,
+  readOnly,
 }: {
   bosses: Boss[];
   onOpen: (b: Boss) => void;
   onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
+  readOnly?: boolean;
 }) {
-  const [tab, setTab] = useState<"all" | "chats" | "funnel" | "outcomes">("all");
+  type TabK = "all" | "boss_owe" | "cand_owe" | "stuck" | "lost" | Stage;
+  const [tab, setTab] = useState<TabK>("all");
 
   const NO_REPLY_MIN = 30;
-  const chatNoReply = bosses
+
+  // Boss owes a reply (boss-side no-reply) — PRIMARY signal per user feedback
+  const bossOwes = bosses
     .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
-    .filter(({ c }) => c.status === "open" && c.chatStatus !== "active" && minutesAgo(c.lastTs) >= NO_REPLY_MIN)
+    .filter(({ c }) => bossOwesReply(c) && minutesAgo(c.lastTs) >= NO_REPLY_MIN)
+    .sort((a, b) => a.c.lastTs - b.c.lastTs);
+
+  // Candidate owes a reply
+  const candOwes = bosses
+    .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
+    .filter(({ c }) => c.status === "open" && lastNonSystemFrom(c) === "boss" && minutesAgo(c.lastTs) >= NO_REPLY_MIN)
     .sort((a, b) => a.c.lastTs - b.c.lastTs);
 
   const STUCK_MIN = 30;
-  const stuck = bosses
+  const stuckRaw = bosses
     .map((b) => ({ b, mins: Math.round(parseDays(b.lastActivity) * 24 * 60) || (b.status === "active" ? 0 : 60) }))
     .filter(({ b, mins }) => mins >= STUCK_MIN && b.stage !== "Closing" && b.status !== "active")
     .sort((a, b) => b.mins - a.mins);
+
+  // Bosses stuck per stage (for funnel-stage tabs) — anyone in stage with no recent movement
+  const stuckByStage: Record<Stage, { b: Boss; mins: number }[]> = STAGES.reduce((acc, s) => {
+    acc[s] = bosses
+      .filter((b) => b.stage === s)
+      .map((b) => ({ b, mins: Math.round(parseDays(b.lastActivity) * 24 * 60) || 60 }))
+      .sort((a, b) => b.mins - a.mins);
+    return acc;
+  }, {} as Record<Stage, { b: Boss; mins: number }[]>);
 
   const negativeChats = bosses
     .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
@@ -1666,24 +1686,37 @@ function AlertsView({
   const healthy = bosses.filter((b) => severityOf(b) === "healthy");
   const [healthyOpen, setHealthyOpen] = useState(false);
 
-  const totalAlerts = chatNoReply.length + stuck.length + negativeChats.length + lowAccept.length + criticalBosses.length;
+  const totalAlerts = bossOwes.length + candOwes.length + stuckRaw.length + negativeChats.length + criticalBosses.length;
 
-  const tabs = [
-    { k: "all" as const, label: "All", count: totalAlerts },
-    { k: "chats" as const, label: "Awaiting reply", count: chatNoReply.length },
-    { k: "funnel" as const, label: "Stuck bosses", count: stuck.length + lowAccept.length },
-    { k: "outcomes" as const, label: "Lost bosses", count: negativeChats.length + criticalBosses.length },
+  const baseTabs: { k: TabK; label: string; count: number; tone?: "warn" | "critical" }[] = [
+    { k: "all", label: "All", count: totalAlerts },
+    { k: "boss_owe", label: "Boss not replied", count: bossOwes.length, tone: "critical" },
+    { k: "cand_owe", label: "Candidate not replied", count: candOwes.length },
+    { k: "stuck", label: "Stuck bosses", count: stuckRaw.length },
+    { k: "lost", label: "Lost / at risk", count: negativeChats.length + criticalBosses.length },
   ];
+  const stageTabs: { k: TabK; label: string; count: number }[] = STAGES.map((s) => ({
+    k: s as TabK,
+    label: s,
+    count: stuckByStage[s].length,
+  }));
 
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
 
-  const showChats = tab === "all" || tab === "chats";
-  const showFunnel = tab === "all" || tab === "funnel";
-  const showOutcomes = tab === "all" || tab === "outcomes";
+  const isStageTab = (STAGES as string[]).includes(tab as string);
+  const showAll = tab === "all";
 
   return (
     <div className="space-y-4">
-      {/* Compact triage strip */}
+      {readOnly && (
+        <div className="rounded-xl border border-warn/30 bg-warn/5 px-3 py-2 flex items-center gap-2">
+          <span className="size-1.5 rounded-full bg-warn" />
+          <span className="text-[11px] font-bold uppercase tracking-widest text-warn">Admin view · read-only</span>
+          <span className="text-[11px] text-muted-foreground">Org-wide overview. Action buttons are disabled.</span>
+        </div>
+      )}
+
+      {/* Compact triage strip — boss-perspective */}
       <div className="rounded-2xl border border-border bg-surface p-3">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
@@ -1693,53 +1726,90 @@ function AlertsView({
           <span className="text-[10px] text-muted-foreground font-mono">{totalAlerts} signals · {healthy.length} healthy</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <AlertSummary tone="critical" label="Bosses waiting on candidate" count={chatNoReply.length} hint="No reply &gt;30m post-nudge" />
-          <AlertSummary tone="warning" label="Bosses stuck in stage" count={stuck.length} hint="Same stage &gt;30m, no movement" />
-          <AlertSummary tone="warning" label="Bosses losing candidates" count={negativeChats.length} hint="Recent negative closes" />
-          <AlertSummary tone="critical" label="Bosses at risk" count={criticalBosses.length + lowAccept.length} hint="Unhappy, ghosted, low engagement" />
+          <AlertSummary tone="critical" label="Boss hasn't replied" count={bossOwes.length} hint="Boss owes candidate a reply &gt;30m" />
+          <AlertSummary tone="warning" label="Candidate hasn't replied" count={candOwes.length} hint="Boss waiting on candidate &gt;30m" />
+          <AlertSummary tone="warning" label="Bosses stuck in funnel" count={stuckRaw.length} hint="Same stage &gt;30m, no movement" />
+          <AlertSummary tone="critical" label="Bosses losing / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" />
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap items-center gap-1 p-1 bg-surface border border-border rounded-lg w-fit">
-        {tabs.map((t) => (
-          <button
-            key={t.k}
-            onClick={() => setTab(t.k)}
-            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
-              tab === t.k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {t.label} <span className="font-mono opacity-70">· {t.count}</span>
-          </button>
-        ))}
+      {/* Two-row tabs: alert categories + funnel stages */}
+      <div className="space-y-2">
+        <TabBar
+          label="By signal"
+          tabs={baseTabs}
+          current={tab}
+          onChange={setTab}
+        />
+        <TabBar
+          label="By funnel stage"
+          tabs={stageTabs}
+          current={tab}
+          onChange={setTab}
+        />
       </div>
 
-      {showChats && (
-        <AlertGroup tone="critical" title="Bosses waiting on candidate reply" hint="Candidate hasn't responded 30m past the auto-nudge window" empty="Every boss conversation got a reply.">
-          {chatNoReply.slice(0, 6).map(({ b, c }) => (
-            <ChatAlertRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
+      {/* Stage drilldown: bosses stuck in this stage + steps checklist */}
+      {isStageTab && (
+        <StageDrilldown
+          stage={tab as Stage}
+          rows={stuckByStage[tab as Stage]}
+          onOpen={onOpen}
+          readOnly={readOnly}
+        />
+      )}
+
+      {(showAll || tab === "boss_owe") && (
+        <AlertGroup
+          tone="critical"
+          title="Bosses haven't replied to candidates"
+          hint="Boss owes the candidate a reply >30m past the auto-nudge window — primary leak"
+          empty="Every boss has replied to their candidates."
+        >
+          {bossOwes.slice(0, 6).map(({ b, c }) => (
+            <BossOweRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} readOnly={readOnly} />
           ))}
-          {chatNoReply.length > 6 && (
+          {bossOwes.length > 6 && (
             <button
-              onClick={() => onChatDrill({ title: "Chats with no reply >30m", chats: chatNoReply.map((x) => x.c) })}
+              onClick={() => onChatDrill({ title: "Boss owes reply >30m", chats: bossOwes.map((x) => x.c) })}
               className="text-[11px] text-primary font-semibold hover:underline"
             >
-              View all {chatNoReply.length} →
+              View all {bossOwes.length} →
             </button>
           )}
         </AlertGroup>
       )}
 
-      {showFunnel && (
-        <AlertGroup tone="warning" title="Bosses stuck in funnel stage" hint="Bosses sitting in the same stage with no movement" empty="Every boss is moving through the funnel.">
-          {stuck.slice(0, 6).map(({ b, mins }) => (
+      {(showAll || tab === "cand_owe") && candOwes.length > 0 && (
+        <AlertGroup
+          tone="warning"
+          title="Candidates haven't replied to bosses"
+          hint="Boss is waiting — auto-nudge boss-side or call candidate"
+          empty=""
+        >
+          {candOwes.slice(0, 6).map(({ b, c }) => (
+            <ChatAlertRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
+          ))}
+          {candOwes.length > 6 && (
+            <button
+              onClick={() => onChatDrill({ title: "Candidate owes reply >30m", chats: candOwes.map((x) => x.c) })}
+              className="text-[11px] text-primary font-semibold hover:underline"
+            >
+              View all {candOwes.length} →
+            </button>
+          )}
+        </AlertGroup>
+      )}
+
+      {(showAll || tab === "stuck") && (
+        <AlertGroup tone="warning" title="Bosses stuck in funnel stage" hint="Pick a stage tab above to see steps for that stage" empty="Every boss is moving through the funnel.">
+          {stuckRaw.slice(0, 6).map(({ b, mins }) => (
             <StuckRow key={b.id} boss={b} mins={mins} onOpen={onOpen} />
           ))}
         </AlertGroup>
       )}
 
-      {showFunnel && lowAccept.length > 0 && (
+      {(showAll || tab === "stuck") && lowAccept.length > 0 && (
         <AlertGroup tone="warning" title="Bosses with weak candidate engagement" hint="Less than 40% of swiped candidates are accepting boss DMs" empty="">
           {lowAccept.map((b) => (
             <BossAlertRow key={b.id} boss={b} reason={`Only ${Math.round((b.dmAccepted / b.swipedToDM) * 100)}% of ${b.swipedToDM} candidates accepted boss DM`} onOpen={onOpen} />
@@ -1747,7 +1817,7 @@ function AlertsView({
         </AlertGroup>
       )}
 
-      {showOutcomes && (
+      {(showAll || tab === "lost") && (
         <AlertGroup tone="critical" title="Bosses losing candidates · review reason" hint="Candidates that closed with a negative outcome on this boss" empty="No bosses lost a candidate recently.">
           {negativeChats.slice(0, 6).map(({ b, c }) => (
             <NegativeCloseRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
@@ -1763,15 +1833,15 @@ function AlertsView({
         </AlertGroup>
       )}
 
-      {showOutcomes && criticalBosses.length > 0 && (
+      {(showAll || tab === "lost") && criticalBosses.length > 0 && (
         <AlertGroup tone="critical" title="Bosses at risk" hint="Boss is unhappy, ghosted, or stalled — needs direct outreach" empty="">
           {criticalBosses.map((b) => (
-            <BossAlertRow key={b.id} boss={b} reason={b.alert ?? bossOneLine(b)} onOpen={onOpen} whatsapp />
+            <BossAlertRow key={b.id} boss={b} reason={b.alert ?? bossOneLine(b)} onOpen={onOpen} whatsapp={!readOnly} />
           ))}
         </AlertGroup>
       )}
 
-      {tab === "all" && (
+      {showAll && (
         <button
           onClick={() => setHealthyOpen((o) => !o)}
           className="w-full flex items-center justify-between p-2.5 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
@@ -1783,11 +1853,175 @@ function AlertsView({
           <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
         </button>
       )}
-      {tab === "all" && healthyOpen && (
+      {showAll && healthyOpen && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
           {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
         </div>
       )}
+    </div>
+  );
+}
+
+/* ---------- Tab bar with label prefix ---------- */
+function TabBar<T extends string>({
+  label,
+  tabs,
+  current,
+  onChange,
+}: {
+  label: string;
+  tabs: { k: T; label: string; count: number; tone?: "warn" | "critical" }[];
+  current: T;
+  onChange: (k: T) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold shrink-0 w-28">{label}</span>
+      <div className="flex flex-wrap items-center gap-1 p-1 bg-surface border border-border rounded-lg">
+        {tabs.map((t) => {
+          const active = current === t.k;
+          const toneCls = t.tone === "critical" && t.count > 0 ? "text-destructive" : t.tone === "warn" && t.count > 0 ? "text-warn" : "";
+          return (
+            <button
+              key={t.k}
+              onClick={() => onChange(t.k)}
+              className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-colors ${
+                active
+                  ? "bg-primary text-primary-foreground"
+                  : `${toneCls || "text-muted-foreground"} hover:text-foreground`
+              }`}
+            >
+              {t.label} <span className={`font-mono opacity-70 ${active ? "" : ""}`}>· {t.count}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Stage-stuck drilldown with steps checklist ---------- */
+function StageDrilldown({
+  stage,
+  rows,
+  onOpen,
+  readOnly,
+}: {
+  stage: Stage;
+  rows: { b: Boss; mins: number }[];
+  onOpen: (b: Boss) => void;
+  readOnly?: boolean;
+}) {
+  const steps = STAGE_STEPS[stage];
+  return (
+    <section className="rounded-2xl border border-primary/25 bg-primary/[0.02] p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="size-2 rounded-full bg-primary" />
+        <span className="text-[11px] font-bold uppercase tracking-widest text-primary">{stage} · stuck bosses</span>
+        <span className="text-[10px] text-muted-foreground">· {rows.length} bosses · standard playbook below</span>
+      </div>
+
+      {/* Stage playbook reference */}
+      <div className="rounded-lg border border-border bg-surface p-3">
+        <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Steps to follow at {stage}</div>
+        <div className="flex flex-wrap gap-2">
+          {steps.map((s, i) => (
+            <span key={i} className="text-[11px] px-2 py-1 rounded-md bg-surface-elevated border border-border text-foreground/80">
+              {i + 1}. {s}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      {rows.length === 0 ? (
+        <div className="text-[11px] text-muted-foreground italic">No bosses stuck at {stage}.</div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(({ b, mins }) => (
+            <StuckBossWithSteps key={b.id} boss={b} stage={stage} mins={mins} onOpen={onOpen} readOnly={readOnly} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
+function StuckBossWithSteps({
+  boss,
+  stage,
+  mins,
+  onOpen,
+  readOnly,
+}: {
+  boss: Boss;
+  stage: Stage;
+  mins: number;
+  onOpen: (b: Boss) => void;
+  readOnly?: boolean;
+}) {
+  const steps = STAGE_STEPS[stage];
+  const done = stepsDone(boss, stage);
+  const completedCount = done.filter(Boolean).length;
+  const pct = Math.round((completedCount / steps.length) * 100);
+  return (
+    <div className="rounded-xl border border-warn/25 bg-surface p-3">
+      <div className="flex items-center gap-3 mb-2">
+        <div className="size-9 rounded-full bg-surface-elevated border border-border flex items-center justify-center text-xs font-bold shrink-0">
+          {initials(boss.name)}
+        </div>
+        <button onClick={() => onOpen(boss)} className="flex-1 min-w-0 text-left">
+          <div className="font-semibold text-sm truncate">
+            {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
+          </div>
+          <div className="text-[11px] text-muted-foreground">
+            Stuck at <span className="font-semibold text-foreground">{stage}</span> for {fmtSince(mins)} · owner {boss.ownerInitials}
+          </div>
+        </button>
+        <div className="flex items-center gap-2 shrink-0">
+          <div className="text-[10px] font-mono text-muted-foreground">{completedCount}/{steps.length}</div>
+          <div className="w-16 h-1.5 rounded-full bg-surface-elevated overflow-hidden">
+            <div className={`h-full ${pct === 100 ? "bg-flow" : pct >= 50 ? "bg-warn" : "bg-destructive"}`} style={{ width: `${pct}%` }} />
+          </div>
+          {!readOnly && <WhatsAppBtn label="Nudge" />}
+        </div>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pl-12">
+        {steps.map((s, i) => (
+          <div key={i} className="flex items-center gap-2 text-[11px]">
+            <span className={`size-4 rounded border flex items-center justify-center shrink-0 ${
+              done[i] ? "bg-flow/15 border-flow/40 text-flow" : "bg-surface-elevated border-border text-muted-foreground"
+            }`}>
+              {done[i] ? (
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" className="size-2.5"><path d="M5 13l4 4L19 7"/></svg>
+              ) : (
+                <span className="size-1 rounded-full bg-muted-foreground/40" />
+              )}
+            </span>
+            <span className={done[i] ? "text-foreground/60 line-through" : "text-foreground/90"}>{s}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/* ---------- Boss-owes-reply row (boss is the bottleneck) ---------- */
+function BossOweRow({ boss, chat, onOpenBoss, readOnly }: { boss: Boss; chat: CandidateChat; onOpenBoss: (b: Boss) => void; readOnly?: boolean }) {
+  const mins = minutesAgo(chat.lastTs);
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-destructive/30 bg-destructive/5">
+      <div className="size-10 rounded-full bg-primary/15 text-primary flex items-center justify-center text-xs font-bold shrink-0">
+        {initials(boss.name)}
+      </div>
+      <button onClick={() => onOpenBoss(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">
+          Owes <span className="font-semibold text-foreground">{chat.candidateName}</span> a reply on {chat.forRole} · last msg {fmtSince(mins)} · "{chat.lastMessage}"
+        </div>
+      </button>
+      {!readOnly && <WhatsAppBtn label="Nudge boss" />}
     </div>
   );
 }
