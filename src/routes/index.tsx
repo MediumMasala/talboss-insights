@@ -243,7 +243,7 @@ function chatJourneyIndex(c: CandidateChat): number {
 function Dashboard() {
   const [section, setSection] = useState<Section>("overview");
   const [view, setView] = useState<View>("mine");
-  const [me, setMe] = useState<string>("YS");
+  const [me, setMe] = useState<string>("GJ");
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<SearchScope>("all");
   const [stageFilter, setStageFilter] = useState<Stage | "all">("all");
