@@ -334,8 +334,6 @@ function Dashboard() {
           count={interviewFiltered.length}
         />
 
-        <ActivityTicker bosses={BOSSES} />
-
         <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
           {/* Goal banner removed per ops feedback */}
 
