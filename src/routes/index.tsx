@@ -1633,6 +1633,177 @@ function fmtSince(mins: number): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
+
+/* ---------- Goal banner ---------- */
+function GoalBanner({ view, me, bosses }: { view: View; me: string; bosses: Boss[] }) {
+  const meOwner = OWNERS.find((o) => o.initials === me);
+  const stuck = bosses.filter((b) => parseDays(b.lastActivity) >= 1 && b.stage !== "Closing").length;
+  const noReply = bosses
+    .flatMap((b) => b.candidateChats)
+    .filter((c) => bossOwesReply(c) && minutesAgo(c.lastTs) >= 30).length;
+  const unhappy = bosses.filter((b) => b.sentiment === "unhappy").length;
+  const total = bosses.length;
+  return (
+    <div className="rounded-2xl border border-primary/25 bg-gradient-to-r from-primary/[0.06] via-primary/[0.02] to-transparent p-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[10px] uppercase tracking-widest font-bold text-primary">Goal</span>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">·</span>
+            <span className="text-[10px] uppercase tracking-widest text-muted-foreground">{view === "mine" ? `Owner ${meOwner?.name ?? me}` : "Org-wide · admin"}</span>
+          </div>
+          <h2 className="text-base font-bold leading-tight">
+            Get more bosses on the app — make onboarding, follow-ups & reach-outs frictionless.
+          </h2>
+          <div className="text-[11px] text-muted-foreground mt-0.5">
+            Reduce stuck bosses, reduce no-replies (boss-side), keep sentiment healthy.
+          </div>
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <GoalStat label="Bosses in scope" value={total} tone="neutral" />
+          <GoalStat label="Stuck" value={stuck} tone={stuck > 0 ? "warn" : "good"} />
+          <GoalStat label="Boss not replied" value={noReply} tone={noReply > 0 ? "bad" : "good"} />
+          <GoalStat label="Unhappy" value={unhappy} tone={unhappy > 0 ? "bad" : "good"} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GoalStat({ label, value, tone }: { label: string; value: number; tone: "good" | "warn" | "bad" | "neutral" }) {
+  const cls =
+    tone === "bad" ? "text-destructive" :
+    tone === "warn" ? "text-warn" :
+    tone === "good" ? "text-flow" :
+    "text-foreground";
+  return (
+    <div className="text-center">
+      <div className={`text-xl font-mono font-bold ${cls}`}>{value}</div>
+      <div className="text-[9px] uppercase tracking-widest text-muted-foreground font-bold">{label}</div>
+    </div>
+  );
+}
+
+/* ---------- BossGPT — natural language query bar ---------- */
+type GPTFilters = {
+  stage?: Stage | "all";
+  status?: ChatStatus | "all";
+  sentiment?: Sentiment | "all";
+  verifiedOnly?: boolean;
+  section?: Section;
+  search?: string;
+};
+
+function parseQuery(q: string): { filters: GPTFilters; summary: string } {
+  const lower = q.toLowerCase();
+  const f: GPTFilters = {};
+  const tokens: string[] = [];
+
+  // stages
+  for (const s of STAGES) {
+    if (lower.includes(s.toLowerCase())) {
+      f.stage = s;
+      tokens.push(`stage = ${s}`);
+      break;
+    }
+  }
+  // sentiment
+  if (/\bunhappy|frustrat|angry|upset\b/.test(lower)) { f.sentiment = "unhappy"; tokens.push("sentiment = unhappy"); }
+  else if (/\bhappy|delighted\b/.test(lower)) { f.sentiment = "happy"; tokens.push("sentiment = happy"); }
+  // status
+  if (/no reply|not reply|not replied|silent|ghost/.test(lower)) { f.status = "no_reply"; tokens.push("status = no reply"); }
+  else if (/\bidle|inactive|stalled\b/.test(lower)) { f.status = "idle"; tokens.push("status = idle"); }
+  else if (/\bactive|live|moving\b/.test(lower)) { f.status = "active"; tokens.push("status = active"); }
+  // verified
+  if (/\bunverified|not verified\b/.test(lower)) { f.verifiedOnly = false; tokens.push("verified = any"); }
+  else if (/\bverified\b/.test(lower)) { f.verifiedOnly = true; tokens.push("verified only"); }
+  // section
+  if (/\bchat|message|dm\b/.test(lower)) { f.section = "chats"; tokens.push("→ chats"); }
+  else if (/\btracker|funnel|pipeline|analytic/.test(lower)) { f.section = "tracker"; tokens.push("→ trackers"); }
+  else if (/\balert|risk|stuck\b/.test(lower)) { f.section = "overview"; tokens.push("→ alerts"); }
+
+  // free-text search of likely company/name (anything in quotes)
+  const m = q.match(/"([^"]+)"/);
+  if (m) { f.search = m[1]; tokens.push(`search "${m[1]}"`); }
+
+  return { filters: f, summary: tokens.length ? tokens.join(" · ") : "couldn't infer filters — try: \"unhappy bosses in talking\"" };
+}
+
+function BossGPT({ bosses, onApply }: { bosses: Boss[]; onApply: (f: GPTFilters) => void }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const examples = [
+    "unhappy bosses in talking",
+    "stuck in verification",
+    "show chats with no reply",
+    "verified bosses in hiring",
+  ];
+  const parsed = q ? parseQuery(q) : null;
+  const matchCount = parsed ? bosses.filter((b) => {
+    const f = parsed.filters;
+    if (f.stage && f.stage !== "all" && b.stage !== f.stage) return false;
+    if (f.status && f.status !== "all" && b.status !== f.status) return false;
+    if (f.sentiment && f.sentiment !== "all" && b.sentiment !== f.sentiment) return false;
+    if (f.verifiedOnly && !b.verified) return false;
+    if (f.search && !`${b.name} ${b.company}`.toLowerCase().includes(f.search.toLowerCase())) return false;
+    return true;
+  }).length : 0;
+
+  return (
+    <div className="rounded-2xl border border-border bg-surface p-3">
+      <div className="flex items-center gap-2">
+        <div className="size-7 rounded-lg bg-primary/15 text-primary flex items-center justify-center shrink-0">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4">
+            <path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3"/>
+          </svg>
+        </div>
+        <div className="text-[10px] uppercase tracking-widest font-bold text-primary shrink-0">BossGPT</div>
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          onFocus={() => setOpen(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && parsed) onApply(parsed.filters);
+          }}
+          placeholder='Ask: "show unhappy bosses in talking", "stuck in verification"…'
+          className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none min-w-0"
+        />
+        {q && (
+          <button
+            onClick={() => parsed && onApply(parsed.filters)}
+            className="text-[11px] font-bold px-3 py-1.5 rounded-md bg-primary text-primary-foreground shrink-0"
+          >
+            Apply · {matchCount}
+          </button>
+        )}
+        {q && (
+          <button onClick={() => { setQ(""); setOpen(false); }} className="text-[11px] text-muted-foreground hover:text-foreground shrink-0">
+            Clear
+          </button>
+        )}
+      </div>
+      {parsed && (
+        <div className="mt-2 text-[11px] text-muted-foreground pl-9">
+          → {parsed.summary} · {matchCount} matching boss{matchCount === 1 ? "" : "es"}
+        </div>
+      )}
+      {open && !q && (
+        <div className="mt-2 pl-9 flex flex-wrap gap-1.5">
+          {examples.map((ex) => (
+            <button
+              key={ex}
+              onClick={() => setQ(ex)}
+              className="text-[10px] px-2 py-1 rounded-md bg-surface-elevated border border-border text-muted-foreground hover:text-foreground"
+            >
+              {ex}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function AlertsView({
   bosses,
   onOpen,
