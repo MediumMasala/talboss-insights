@@ -1877,50 +1877,32 @@ function AlertsView({
         />
       )}
 
-      {(showAll || tab === "boss_owe") && (
+      {(showAll || tab === "no_reply") && (
         <AlertGroup
           tone="critical"
-          title="Bosses haven't replied to candidates"
-          hint="Boss owes the candidate a reply >30m past the auto-nudge window — primary leak"
-          empty="Every boss has replied to their candidates."
+          title="No reply · boss or candidate"
+          hint={`Boss owes ${bossOwes.length} · candidate owes ${candOwes.length} · all >30m past auto-nudge`}
+          empty="Every conversation got a reply. ✓"
         >
-          {bossOwes.slice(0, 6).map(({ b, c }) => (
+          {bossOwes.slice(0, 5).map(({ b, c }) => (
             <BossOweRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} readOnly={readOnly} />
           ))}
-          {bossOwes.length > 6 && (
-            <button
-              onClick={() => onChatDrill({ title: "Boss owes reply >30m", chats: bossOwes.map((x) => x.c) })}
-              className="text-[11px] text-primary font-semibold hover:underline"
-            >
-              View all {bossOwes.length} →
-            </button>
-          )}
-        </AlertGroup>
-      )}
-
-      {(showAll || tab === "cand_owe") && candOwes.length > 0 && (
-        <AlertGroup
-          tone="warning"
-          title="Candidates haven't replied to bosses"
-          hint="Boss is waiting — auto-nudge boss-side or call candidate"
-          empty=""
-        >
-          {candOwes.slice(0, 6).map(({ b, c }) => (
+          {candOwes.slice(0, 5).map(({ b, c }) => (
             <ChatAlertRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
           ))}
-          {candOwes.length > 6 && (
+          {(bossOwes.length + candOwes.length) > 10 && (
             <button
-              onClick={() => onChatDrill({ title: "Candidate owes reply >30m", chats: candOwes.map((x) => x.c) })}
+              onClick={() => onChatDrill({ title: "All no-reply chats", chats: [...bossOwes, ...candOwes].map((x) => x.c) })}
               className="text-[11px] text-primary font-semibold hover:underline"
             >
-              View all {candOwes.length} →
+              View all {bossOwes.length + candOwes.length} →
             </button>
           )}
         </AlertGroup>
       )}
 
       {(showAll || tab === "stuck") && (
-        <AlertGroup tone="warning" title="Bosses stuck in funnel stage" hint="Pick a stage tab above to see steps for that stage" empty="Every boss is moving through the funnel.">
+        <AlertGroup tone="warning" title="Bosses stuck in funnel stage" hint="Pick a stage tab below to see steps for that stage" empty="Every boss is moving through the funnel. ✓">
           {stuckRaw.slice(0, 6).map(({ b, mins }) => (
             <StuckRow key={b.id} boss={b} mins={mins} onOpen={onOpen} />
           ))}
@@ -1936,7 +1918,7 @@ function AlertsView({
       )}
 
       {(showAll || tab === "lost") && (
-        <AlertGroup tone="critical" title="Bosses losing candidates · review reason" hint="Candidates that closed with a negative outcome on this boss" empty="No bosses lost a candidate recently.">
+        <AlertGroup tone="critical" title="Bosses losing candidates · review reason" hint="Candidates that closed with a negative outcome on this boss" empty="No bosses lost a candidate recently. ✓">
           {negativeChats.slice(0, 6).map(({ b, c }) => (
             <NegativeCloseRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
           ))}
@@ -1959,22 +1941,45 @@ function AlertsView({
         </AlertGroup>
       )}
 
-      {showAll && (
-        <button
-          onClick={() => setHealthyOpen((o) => !o)}
-          className="w-full flex items-center justify-between p-2.5 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-flow" />
-            <span className="text-xs font-semibold text-flow">{healthy.length} bosses healthy · no action needed</span>
+      {(showAll || tab === "happy") && (
+        <section className="rounded-2xl border border-flow/25 bg-flow/[0.03] p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-flow" />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-flow">
+                Bosses going well · {healthy.length}
+              </span>
+              <span className="text-[10px] text-muted-foreground hidden md:inline">· healthy sentiment, replying fast</span>
+            </div>
+            {showAll && healthy.length > 0 && (
+              <button onClick={() => setHealthyOpen((o) => !o)} className="text-[11px] text-flow hover:underline font-semibold">
+                {healthyOpen ? "Collapse" : "Expand"}
+              </button>
+            )}
           </div>
-          <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
-        </button>
-      )}
-      {showAll && healthyOpen && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
-        </div>
+          {healthy.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground italic">No healthy bosses in scope yet.</div>
+          ) : showAll && !healthyOpen ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              {healthy.slice(0, 10).map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => onOpen(b)}
+                  className="flex items-center gap-2 px-2 py-1 rounded-full bg-surface border border-flow/20 hover:border-flow/40 transition-colors"
+                  title={`${b.name} · ${b.company}`}
+                >
+                  <span className="size-5 rounded-full bg-flow/15 text-flow flex items-center justify-center text-[9px] font-bold">{initials(b.name)}</span>
+                  <span className="text-[11px] font-semibold truncate max-w-[120px]">{b.name.split(" ")[0]}</span>
+                </button>
+              ))}
+              {healthy.length > 10 && <span className="text-[10px] text-muted-foreground">+{healthy.length - 10} more</span>}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
