@@ -1811,15 +1811,8 @@ function AlertsView({
     { k: "lost", label: "Lost / at risk", count: negativeChats.length + criticalBosses.length },
     { k: "happy", label: "Happy", count: healthy.length },
   ];
-  const stageTabs: { k: TabK; label: string; count: number }[] = STAGES.map((s) => ({
-    k: s as TabK,
-    label: s,
-    count: stuckByStage[s].length,
-  }));
-
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
 
-  const isStageTab = (STAGES as string[]).includes(tab as string);
   const showAll = tab === "all";
 
   return (
