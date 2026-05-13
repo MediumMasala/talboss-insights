@@ -1829,47 +1829,27 @@ function AlertsView({
         </div>
       )}
 
-      {/* What changed today + 4-card live grid */}
-      <div className="rounded-2xl border border-border bg-surface p-3">
-        <div className="flex items-center justify-between mb-2.5">
-          <div className="flex items-center gap-2">
-            <span className="size-1.5 rounded-full bg-destructive animate-pulse" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">What changed today</span>
-            <span className="text-[11px] text-foreground/80 truncate">
-              {bossOwes.length} boss{bossOwes.length === 1 ? "" : "es"} owe a reply · {stuckRaw.length} stuck · {healthy.length} healthy
-            </span>
-          </div>
-          <span className="text-[10px] text-muted-foreground font-mono shrink-0">{totalAlerts} live signals</span>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <AlertSummary tone="critical" label="No reply" count={bossOwes.length + candOwes.length} hint={`${bossOwes.length} boss · ${candOwes.length} candidate · >30m`} delta={+2} />
-          <AlertSummary tone="warning" label="Stuck in funnel" count={stuckRaw.length} hint="Same stage >30m, no movement" delta={+1} />
-          <AlertSummary tone="critical" label="Lost / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" delta={-1} />
-          <AlertSummary tone="healthy" label="Healthy" count={healthy.length} hint="Active, replying, sentiment good" delta={+3} />
-        </div>
+      {/* Compact alert summary — 4 cards */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+        <AlertSummary tone="critical" label="No reply" count={bossOwes.length + candOwes.length} hint={`${bossOwes.length} boss · ${candOwes.length} candidate · >30m`} delta={+2} />
+        <AlertSummary tone="warning" label="Stuck in funnel" count={stuckRaw.length} hint="Same stage >30m, no movement" delta={+1} />
+        <AlertSummary tone="critical" label="Lost / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" delta={-1} />
+        <AlertSummary tone="healthy" label="Healthy" count={healthy.length} hint="Active, replying, sentiment good" delta={+3} />
       </div>
 
-      {/* Two-row tabs: alert categories + funnel stages */}
-      <div className="space-y-2">
-        <TabBar
-          label="By signal"
-          tabs={baseTabs}
-          current={tab}
-          onChange={setTab}
-        />
-        <TabBar
-          label="By funnel stage"
-          tabs={stageTabs}
-          current={tab}
-          onChange={setTab}
-        />
-      </div>
+      {/* Single tab row — by signal. Use the global Filters bar above for stage/team/vibe. */}
+      <TabBar
+        label="View"
+        tabs={baseTabs}
+        current={tab}
+        onChange={setTab}
+      />
 
-      {/* Stage drilldown: bosses stuck in this stage + steps checklist */}
-      {isStageTab && (
+      {/* Stage drilldown only when a stage is selected via Filters bar */}
+      {stageDrilldown && (
         <StageDrilldown
-          stage={tab as Stage}
-          rows={stuckByStage[tab as Stage]}
+          stage={stageDrilldown}
+          rows={stuckByStage[stageDrilldown]}
           onOpen={onOpen}
           readOnly={readOnly}
         />
