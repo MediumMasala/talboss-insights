@@ -243,7 +243,7 @@ function chatJourneyIndex(c: CandidateChat): number {
 function Dashboard() {
   const [section, setSection] = useState<Section>("overview");
   const [view, setView] = useState<View>("mine");
-  const [me, setMe] = useState<string>("YS");
+  const [me, setMe] = useState<string>("GJ");
   const [search, setSearch] = useState("");
   const [scope, setScope] = useState<SearchScope>("all");
   const [stageFilter, setStageFilter] = useState<Stage | "all">("all");
@@ -337,7 +337,7 @@ function Dashboard() {
         <ActivityTicker bosses={BOSSES} />
 
         <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
-          <GoalBanner view={view} me={me} bosses={interviewFiltered} />
+          {/* Goal banner removed per ops feedback */}
 
           <BossGPT
             bosses={interviewFiltered}
@@ -1162,67 +1162,7 @@ function Header({
       </div>
 
       <div className="flex items-center gap-3">
-        {/* Scoped search */}
-        <div className="relative flex items-center bg-surface border border-border rounded-lg focus-within:ring-1 focus-within:ring-ring">
-          <button
-            onClick={() => setScopeOpen((o) => !o)}
-            className="flex items-center gap-1 pl-2.5 pr-2 h-9 text-[11px] font-semibold text-primary hover:text-primary/80 border-r border-border rounded-l-lg"
-            title="Choose what to search by"
-          >
-            <span className="uppercase tracking-wider">{scopeLabel[scope]}</span>
-            <svg className={`size-3 transition-transform ${scopeOpen ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m6 9 6 6 6-6"/></svg>
-          </button>
-          <svg
-            className="ml-2.5 size-4 text-muted-foreground pointer-events-none shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.5-3.5" />
-          </svg>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            type="text"
-            placeholder={scopePlaceholder[scope]}
-            className="w-72 bg-transparent py-2 pl-2 pr-3 text-sm placeholder:text-muted-foreground focus:outline-none"
-          />
-          {scopeOpen && (
-            <>
-              <div className="fixed inset-0 z-30" onClick={() => setScopeOpen(false)} />
-              <div className="absolute top-full left-0 mt-1 z-40 w-64 bg-surface border border-border rounded-lg shadow-xl overflow-hidden">
-                <div className="px-3 py-2 text-[10px] uppercase tracking-widest text-muted-foreground border-b border-border bg-surface-elevated/40">
-                  Search by…
-                </div>
-                {(Object.keys(scopeLabel) as SearchScope[]).map((k) => {
-                  const active = scope === k;
-                  return (
-                    <button
-                      key={k}
-                      onClick={() => {
-                        setScope(k);
-                        setScopeOpen(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 hover:bg-surface-elevated flex items-center justify-between gap-2 ${
-                        active ? "bg-surface-elevated" : ""
-                      }`}
-                    >
-                      <div className="min-w-0">
-                        <div className={`text-xs font-semibold ${active ? "text-primary" : "text-foreground"}`}>
-                          {scopeLabel[k]}
-                        </div>
-                        <div className="text-[10px] text-muted-foreground truncate">{scopeHint[k]}</div>
-                      </div>
-                      {active && <span className="text-primary text-xs">✓</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
+        {/* Top scoped search removed — single search lives in the Ask TalBoss bar below */}
 
         {alerts > 0 && (
           <button
@@ -1722,11 +1662,15 @@ function parseQuery(q: string): { filters: GPTFilters; summary: string } {
   else if (/\btracker|funnel|pipeline|analytic/.test(lower)) { f.section = "tracker"; tokens.push("→ trackers"); }
   else if (/\balert|risk|stuck\b/.test(lower)) { f.section = "overview"; tokens.push("→ alerts"); }
 
-  // free-text search of likely company/name (anything in quotes)
+  // free-text search — quoted string, or whole query if nothing else inferred
   const m = q.match(/"([^"]+)"/);
   if (m) { f.search = m[1]; tokens.push(`search "${m[1]}"`); }
+  else if (tokens.length === 0 && q.trim().length >= 2) {
+    f.search = q.trim();
+    tokens.push(`search "${q.trim()}"`);
+  }
 
-  return { filters: f, summary: tokens.length ? tokens.join(" · ") : "couldn't infer filters — try: \"unhappy bosses in talking\"" };
+  return { filters: f, summary: tokens.length ? tokens.join(" · ") : "type a boss name, company, or try: \"unhappy bosses in talking\"" };
 }
 
 function BossGPT({ bosses, onApply }: { bosses: Boss[]; onApply: (f: GPTFilters) => void }) {
@@ -1757,7 +1701,7 @@ function BossGPT({ bosses, onApply }: { bosses: Boss[]; onApply: (f: GPTFilters)
             <path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3"/>
           </svg>
         </div>
-        <div className="text-[10px] uppercase tracking-widest font-bold text-primary shrink-0">BossGPT</div>
+        <div className="text-[10px] uppercase tracking-widest font-bold text-primary shrink-0">Ask TalBoss</div>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -1765,7 +1709,7 @@ function BossGPT({ bosses, onApply }: { bosses: Boss[]; onApply: (f: GPTFilters)
           onKeyDown={(e) => {
             if (e.key === "Enter" && parsed) onApply(parsed.filters);
           }}
-          placeholder='Ask: "show unhappy bosses in talking", "stuck in verification"…'
+          placeholder='Ask: "unhappy bosses in talking", "stuck in verification", boss name, company…'
           className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none min-w-0"
         />
         {q && (
@@ -1815,7 +1759,7 @@ function AlertsView({
   onChatDrill: (d: { title: string; chats: CandidateChat[] }) => void;
   readOnly?: boolean;
 }) {
-  type TabK = "all" | "boss_owe" | "cand_owe" | "stuck" | "lost" | Stage;
+  type TabK = "all" | "no_reply" | "stuck" | "lost" | "happy" | Stage;
   const [tab, setTab] = useState<TabK>("all");
 
   const NO_REPLY_MIN = 30;
@@ -1861,10 +1805,10 @@ function AlertsView({
 
   const baseTabs: { k: TabK; label: string; count: number; tone?: "warn" | "critical" }[] = [
     { k: "all", label: "All", count: totalAlerts },
-    { k: "boss_owe", label: "Boss not replied", count: bossOwes.length, tone: "critical" },
-    { k: "cand_owe", label: "Candidate not replied", count: candOwes.length },
-    { k: "stuck", label: "Stuck bosses", count: stuckRaw.length },
+    { k: "no_reply", label: "No reply", count: bossOwes.length + candOwes.length, tone: "critical" },
+    { k: "stuck", label: "Stuck", count: stuckRaw.length },
     { k: "lost", label: "Lost / at risk", count: negativeChats.length + criticalBosses.length },
+    { k: "happy", label: "Happy", count: healthy.length },
   ];
   const stageTabs: { k: TabK; label: string; count: number }[] = STAGES.map((s) => ({
     k: s as TabK,
@@ -1887,20 +1831,23 @@ function AlertsView({
         </div>
       )}
 
-      {/* Compact triage strip — boss-perspective */}
+      {/* What changed today + 4-card live grid */}
       <div className="rounded-2xl border border-border bg-surface p-3">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2.5">
           <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-destructive animate-pulse" />
-            <span className="text-[11px] font-bold uppercase tracking-widest">Boss alerts · live</span>
+            <span className="size-1.5 rounded-full bg-destructive animate-pulse" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">What changed today</span>
+            <span className="text-[11px] text-foreground/80 truncate">
+              {bossOwes.length} boss{bossOwes.length === 1 ? "" : "es"} owe a reply · {stuckRaw.length} stuck · {healthy.length} healthy
+            </span>
           </div>
-          <span className="text-[10px] text-muted-foreground font-mono">{totalAlerts} signals · {healthy.length} healthy</span>
+          <span className="text-[10px] text-muted-foreground font-mono shrink-0">{totalAlerts} live signals</span>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-          <AlertSummary tone="critical" label="Boss hasn't replied" count={bossOwes.length} hint="Boss owes candidate a reply &gt;30m" />
-          <AlertSummary tone="warning" label="Candidate hasn't replied" count={candOwes.length} hint="Boss waiting on candidate &gt;30m" />
-          <AlertSummary tone="warning" label="Bosses stuck in funnel" count={stuckRaw.length} hint="Same stage &gt;30m, no movement" />
-          <AlertSummary tone="critical" label="Bosses losing / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" />
+          <AlertSummary tone="critical" label="No reply" count={bossOwes.length + candOwes.length} hint={`${bossOwes.length} boss · ${candOwes.length} candidate · >30m`} delta={+2} />
+          <AlertSummary tone="warning" label="Stuck in funnel" count={stuckRaw.length} hint="Same stage >30m, no movement" delta={+1} />
+          <AlertSummary tone="critical" label="Lost / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" delta={-1} />
+          <AlertSummary tone="healthy" label="Healthy" count={healthy.length} hint="Active, replying, sentiment good" delta={+3} />
         </div>
       </div>
 
@@ -1930,50 +1877,32 @@ function AlertsView({
         />
       )}
 
-      {(showAll || tab === "boss_owe") && (
+      {(showAll || tab === "no_reply") && (
         <AlertGroup
           tone="critical"
-          title="Bosses haven't replied to candidates"
-          hint="Boss owes the candidate a reply >30m past the auto-nudge window — primary leak"
-          empty="Every boss has replied to their candidates."
+          title="No reply · boss or candidate"
+          hint={`Boss owes ${bossOwes.length} · candidate owes ${candOwes.length} · all >30m past auto-nudge`}
+          empty="Every conversation got a reply. ✓"
         >
-          {bossOwes.slice(0, 6).map(({ b, c }) => (
+          {bossOwes.slice(0, 5).map(({ b, c }) => (
             <BossOweRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} readOnly={readOnly} />
           ))}
-          {bossOwes.length > 6 && (
-            <button
-              onClick={() => onChatDrill({ title: "Boss owes reply >30m", chats: bossOwes.map((x) => x.c) })}
-              className="text-[11px] text-primary font-semibold hover:underline"
-            >
-              View all {bossOwes.length} →
-            </button>
-          )}
-        </AlertGroup>
-      )}
-
-      {(showAll || tab === "cand_owe") && candOwes.length > 0 && (
-        <AlertGroup
-          tone="warning"
-          title="Candidates haven't replied to bosses"
-          hint="Boss is waiting — auto-nudge boss-side or call candidate"
-          empty=""
-        >
-          {candOwes.slice(0, 6).map(({ b, c }) => (
+          {candOwes.slice(0, 5).map(({ b, c }) => (
             <ChatAlertRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
           ))}
-          {candOwes.length > 6 && (
+          {(bossOwes.length + candOwes.length) > 10 && (
             <button
-              onClick={() => onChatDrill({ title: "Candidate owes reply >30m", chats: candOwes.map((x) => x.c) })}
+              onClick={() => onChatDrill({ title: "All no-reply chats", chats: [...bossOwes, ...candOwes].map((x) => x.c) })}
               className="text-[11px] text-primary font-semibold hover:underline"
             >
-              View all {candOwes.length} →
+              View all {bossOwes.length + candOwes.length} →
             </button>
           )}
         </AlertGroup>
       )}
 
       {(showAll || tab === "stuck") && (
-        <AlertGroup tone="warning" title="Bosses stuck in funnel stage" hint="Pick a stage tab above to see steps for that stage" empty="Every boss is moving through the funnel.">
+        <AlertGroup tone="warning" title="Bosses stuck in funnel stage" hint="Pick a stage tab below to see steps for that stage" empty="Every boss is moving through the funnel. ✓">
           {stuckRaw.slice(0, 6).map(({ b, mins }) => (
             <StuckRow key={b.id} boss={b} mins={mins} onOpen={onOpen} />
           ))}
@@ -1989,7 +1918,7 @@ function AlertsView({
       )}
 
       {(showAll || tab === "lost") && (
-        <AlertGroup tone="critical" title="Bosses losing candidates · review reason" hint="Candidates that closed with a negative outcome on this boss" empty="No bosses lost a candidate recently.">
+        <AlertGroup tone="critical" title="Bosses losing candidates · review reason" hint="Candidates that closed with a negative outcome on this boss" empty="No bosses lost a candidate recently. ✓">
           {negativeChats.slice(0, 6).map(({ b, c }) => (
             <NegativeCloseRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
           ))}
@@ -2012,22 +1941,45 @@ function AlertsView({
         </AlertGroup>
       )}
 
-      {showAll && (
-        <button
-          onClick={() => setHealthyOpen((o) => !o)}
-          className="w-full flex items-center justify-between p-2.5 rounded-xl border border-flow/30 bg-flow/5 hover:bg-flow/10 transition-colors"
-        >
-          <div className="flex items-center gap-2">
-            <span className="size-2 rounded-full bg-flow" />
-            <span className="text-xs font-semibold text-flow">{healthy.length} bosses healthy · no action needed</span>
+      {(showAll || tab === "happy") && (
+        <section className="rounded-2xl border border-flow/25 bg-flow/[0.03] p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="size-2 rounded-full bg-flow" />
+              <span className="text-[11px] font-bold uppercase tracking-widest text-flow">
+                Bosses going well · {healthy.length}
+              </span>
+              <span className="text-[10px] text-muted-foreground hidden md:inline">· healthy sentiment, replying fast</span>
+            </div>
+            {showAll && healthy.length > 0 && (
+              <button onClick={() => setHealthyOpen((o) => !o)} className="text-[11px] text-flow hover:underline font-semibold">
+                {healthyOpen ? "Collapse" : "Expand"}
+              </button>
+            )}
           </div>
-          <span className="text-[11px] text-muted-foreground">{healthyOpen ? "Hide" : "Show"}</span>
-        </button>
-      )}
-      {showAll && healthyOpen && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-          {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
-        </div>
+          {healthy.length === 0 ? (
+            <div className="text-[11px] text-muted-foreground italic">No healthy bosses in scope yet.</div>
+          ) : showAll && !healthyOpen ? (
+            <div className="flex items-center gap-2 flex-wrap">
+              {healthy.slice(0, 10).map((b) => (
+                <button
+                  key={b.id}
+                  onClick={() => onOpen(b)}
+                  className="flex items-center gap-2 px-2 py-1 rounded-full bg-surface border border-flow/20 hover:border-flow/40 transition-colors"
+                  title={`${b.name} · ${b.company}`}
+                >
+                  <span className="size-5 rounded-full bg-flow/15 text-flow flex items-center justify-center text-[9px] font-bold">{initials(b.name)}</span>
+                  <span className="text-[11px] font-semibold truncate max-w-[120px]">{b.name.split(" ")[0]}</span>
+                </button>
+              ))}
+              {healthy.length > 10 && <span className="text-[10px] text-muted-foreground">+{healthy.length - 10} more</span>}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
+            </div>
+          )}
+        </section>
       )}
     </div>
   );
@@ -2197,20 +2149,39 @@ function BossOweRow({ boss, chat, onOpenBoss, readOnly }: { boss: Boss; chat: Ca
   );
 }
 
-function AlertSummary({ tone, label, count, hint }: { tone: "critical" | "warning" | "healthy"; label: string; count: number; hint: string }) {
+function AlertSummary({ tone, label, count, hint, delta }: { tone: "critical" | "warning" | "healthy"; label: string; count: number; hint: string; delta?: number }) {
   const map = {
     critical: { border: "border-destructive/30", bg: "bg-destructive/5", txt: "text-destructive", dot: "bg-destructive" },
     warning: { border: "border-warn/30", bg: "bg-warn/5", txt: "text-warn", dot: "bg-warn" },
     healthy: { border: "border-flow/30", bg: "bg-flow/5", txt: "text-flow", dot: "bg-flow" },
   } as const;
   const t = map[tone];
+  // For deltas: on red cards, up = bad; on healthy card, up = good
+  const isHealthy = tone === "healthy";
+  const deltaTone =
+    delta === undefined || delta === 0 ? "text-muted-foreground" :
+    (isHealthy ? (delta > 0 ? "text-flow" : "text-destructive") : (delta > 0 ? "text-destructive" : "text-flow"));
+  const sparkSeed = `${label}-${count}`;
+  const series = seedSeries(sparkSeed, 14, Math.max(2, count));
   return (
-    <div className={`p-3 rounded-xl border ${t.border} ${t.bg}`}>
+    <div className={`p-3 rounded-xl border ${t.border} ${t.bg} flex flex-col gap-1`}>
       <div className="flex items-center gap-1.5">
         <span className={`size-1.5 rounded-full ${t.dot}`} />
         <span className={`text-[10px] font-bold uppercase tracking-widest ${t.txt}`}>{label}</span>
       </div>
-      <div className={`text-2xl font-mono font-bold mt-1 ${t.txt}`}>{count}</div>
+      <div className="flex items-end justify-between gap-2">
+        <div className={`text-2xl font-mono font-bold ${t.txt}`}>{count}</div>
+        <div className="flex flex-col items-end gap-0.5">
+          {delta !== undefined && (
+            <span className={`text-[10px] font-mono font-bold ${deltaTone}`}>
+              {delta > 0 ? "↑" : delta < 0 ? "↓" : "·"} {Math.abs(delta)} vs yesterday
+            </span>
+          )}
+          <div className="w-16 h-5 opacity-80">
+            <Sparkline data={series} tone={isHealthy ? "flow" : "warn"} />
+          </div>
+        </div>
+      </div>
       <div className="text-[10px] text-muted-foreground">{hint}</div>
     </div>
   );
