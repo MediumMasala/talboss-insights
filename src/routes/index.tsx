@@ -1697,7 +1697,7 @@ function BossGPT({ bosses, onApply }: { bosses: Boss[]; onApply: (f: GPTFilters)
             <path d="M12 2v4M12 18v4M2 12h4M18 12h4M5 5l3 3M16 16l3 3M5 19l3-3M16 8l3-3"/>
           </svg>
         </div>
-        <div className="text-[10px] uppercase tracking-widest font-bold text-primary shrink-0">BossGPT</div>
+        <div className="text-[10px] uppercase tracking-widest font-bold text-primary shrink-0">Ask TalBoss</div>
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
@@ -1705,7 +1705,7 @@ function BossGPT({ bosses, onApply }: { bosses: Boss[]; onApply: (f: GPTFilters)
           onKeyDown={(e) => {
             if (e.key === "Enter" && parsed) onApply(parsed.filters);
           }}
-          placeholder='Ask: "show unhappy bosses in talking", "stuck in verification"…'
+          placeholder='Ask: "unhappy bosses in talking", "stuck in verification", boss name, company…'
           className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none min-w-0"
         />
         {q && (
