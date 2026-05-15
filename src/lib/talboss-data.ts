@@ -1,10 +1,10 @@
 export type Stage =
-  | "Onboarding"
+  | "Identity"
+  | "Personality"
+  | "Job Setup"
   | "Verification"
-  | "Job Creation"
   | "Talking"
-  | "Interview"
-  | "Hiring"
+  | "Chatting"
   | "Closing";
 
 export type ChatStatus = "active" | "idle" | "no_reply" | "closed";
@@ -113,12 +113,12 @@ export interface Boss {
 }
 
 export const STAGES: Stage[] = [
-  "Onboarding",
+  "Identity",
+  "Personality",
+  "Job Setup",
   "Verification",
-  "Job Creation",
   "Talking",
-  "Interview",
-  "Hiring",
+  "Chatting",
   "Closing",
 ];
 
@@ -256,7 +256,7 @@ export const BOSSES: Boss[] = [
     role: "Founding PM",
     location: "Bengaluru",
     verified: true,
-    stage: "Interview",
+    stage: "Chatting",
     status: "active",
     sentiment: "neutral",
     rolesOpen: 2,
@@ -323,7 +323,7 @@ export const BOSSES: Boss[] = [
     role: "VP Operations",
     location: "London",
     verified: true,
-    stage: "Hiring",
+    stage: "Chatting",
     status: "no_reply",
     sentiment: "unhappy",
     rolesOpen: 1,
@@ -356,7 +356,7 @@ export const BOSSES: Boss[] = [
     role: "Founder",
     location: "Pune",
     verified: false,
-    stage: "Onboarding",
+    stage: "Personality",
     status: "active",
     sentiment: "happy",
     rolesOpen: 1,
@@ -424,7 +424,7 @@ export const BOSSES: Boss[] = [
   },
   {
     id: "GR-66502", name: "Anika Sethi", company: "Vault", role: "Head Product", location: "Mumbai",
-    verified: true, stage: "Interview", status: "active", sentiment: "happy",
+    verified: true, stage: "Chatting", status: "active", sentiment: "happy",
     rolesOpen: 1, chatsOpen: 2, chatsClosed: 2, hired: 1, notHired: 1, hiringIntent: 82,
     swipedToDM: 14, dmAccepted: 11, lastActivity: "1h ago",
     email: "anika@vault.so", phone: "+91 22 xxx 1190", ownerInitials: "GJ",
@@ -456,7 +456,7 @@ export const BOSSES: Boss[] = [
   },
   {
     id: "GR-66505", name: "Sahil Dewan", company: "Kite Health", role: "VP Eng", location: "Gurgaon",
-    verified: true, stage: "Hiring", status: "active", sentiment: "happy",
+    verified: true, stage: "Chatting", status: "active", sentiment: "happy",
     rolesOpen: 2, chatsOpen: 2, chatsClosed: 3, hired: 2, notHired: 1, hiringIntent: 88,
     swipedToDM: 18, dmAccepted: 15, lastActivity: "30m ago",
     email: "sahil@kite.health", phone: "+91 12 xxx 4501", ownerInitials: "GJ",
@@ -486,7 +486,7 @@ export const BOSSES: Boss[] = [
   },
   {
     id: "GR-66508", name: "Rohit Khanna", company: "Orbit Cloud", role: "Eng Manager", location: "Remote",
-    verified: false, stage: "Onboarding", status: "active", sentiment: "happy",
+    verified: false, stage: "Identity", status: "active", sentiment: "happy",
     rolesOpen: 1, chatsOpen: 0, chatsClosed: 0, hired: 0, notHired: 0, hiringIntent: 70,
     swipedToDM: 0, dmAccepted: 0, lastActivity: "1h ago",
     email: "rohit@orbit.cloud", phone: "+91 98xxx 22019", ownerInitials: "SJ",
@@ -496,7 +496,7 @@ export const BOSSES: Boss[] = [
   },
   {
     id: "GR-66509", name: "Liam Carter", company: "Brightline", role: "Head Talent", location: "London",
-    verified: true, stage: "Hiring", status: "no_reply", sentiment: "unhappy",
+    verified: true, stage: "Chatting", status: "no_reply", sentiment: "unhappy",
     rolesOpen: 1, chatsOpen: 1, chatsClosed: 3, hired: 0, notHired: 3, hiringIntent: 45,
     swipedToDM: 11, dmAccepted: 4, lastActivity: "4d ago",
     email: "liam@brightline.co", phone: "+44 20 xxx 7012", ownerInitials: "GT",
@@ -507,7 +507,7 @@ export const BOSSES: Boss[] = [
   },
   {
     id: "GR-66510", name: "Aisha Khan", company: "Mosaic", role: "VP Product", location: "Dubai",
-    verified: true, stage: "Interview", status: "active", sentiment: "happy",
+    verified: true, stage: "Chatting", status: "active", sentiment: "happy",
     rolesOpen: 2, chatsOpen: 3, chatsClosed: 2, hired: 1, notHired: 1, hiringIntent: 80,
     swipedToDM: 16, dmAccepted: 13, lastActivity: "45m ago",
     email: "aisha@mosaic.ae", phone: "+971 4 xxx 1188", ownerInitials: "GJ",
@@ -517,7 +517,7 @@ export const BOSSES: Boss[] = [
   },
   {
     id: "GR-66511", name: "Neil Saxena", company: "Forge", role: "CTO", location: "Bengaluru",
-    verified: true, stage: "Job Creation", status: "idle", sentiment: "neutral",
+    verified: true, stage: "Job Setup", status: "idle", sentiment: "neutral",
     rolesOpen: 0, chatsOpen: 0, chatsClosed: 0, hired: 0, notHired: 0, hiringIntent: 65,
     swipedToDM: 0, dmAccepted: 0, lastActivity: "2d ago",
     email: "neil@forge.io", phone: "+91 80xxx 11290", ownerInitials: "GJ",
