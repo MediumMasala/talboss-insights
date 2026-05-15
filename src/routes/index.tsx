@@ -1771,64 +1771,74 @@ function AlertsView({
   readOnly?: boolean;
   stageFilter?: Stage | "all";
 }) {
-  type TabK = "all" | "no_reply" | "stuck" | "lost" | "happy";
+  // Merged funnel groups for the alerts strip (Verification clubbed under Onboarding)
+  type StageGroup = "Onboarding" | "Job Creation" | "Talking" | "Interview" | "Hiring" | "Closing";
+  const STAGE_GROUPS: StageGroup[] = ["Onboarding", "Job Creation", "Talking", "Interview", "Hiring", "Closing"];
+  const stagesIn = (g: StageGroup): Stage[] =>
+    g === "Onboarding" ? ["Onboarding", "Verification"] : [g as Stage];
+
+  type TabK = "all" | "no_reply" | "unhappy" | StageGroup;
   const [tab, setTab] = useState<TabK>("all");
-  const stageDrilldown: Stage | null = stageFilter && stageFilter !== "all" ? stageFilter : null;
+  const now = useClientNow();
+  const mounted = now > 0;
 
-  const NO_REPLY_MIN = 30;
+  // Escalation thresholds: PN at 10m, automated WATI at 70m, alert visible after 130m of no boss/cand reply
+  const PN_MIN = 10;
+  const WATI_MIN = 70;
+  const ALERT_MIN = 130;
+  const escalationStage = (mins: number): "pn" | "wati" | "stale" =>
+    mins >= ALERT_MIN ? "stale" : mins >= WATI_MIN ? "wati" : "pn";
 
-  // Boss owes a reply (boss-side no-reply) — PRIMARY signal per user feedback
-  const bossOwes = bosses
-    .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
-    .filter(({ c }) => bossOwesReply(c) && minutesAgo(c.lastTs) >= NO_REPLY_MIN)
-    .sort((a, b) => a.c.lastTs - b.c.lastTs);
+  // No reply: both sides eligible, but only after the full PN→WATI→stale escalation has elapsed
+  const minsAgo = (ts: number) => (mounted ? Math.max(0, Math.round((now - ts) / 60000)) : 0);
 
-  // Candidate owes a reply
-  const candOwes = bosses
-    .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
-    .filter(({ c }) => c.status === "open" && lastNonSystemFrom(c) === "boss" && minutesAgo(c.lastTs) >= NO_REPLY_MIN)
-    .sort((a, b) => a.c.lastTs - b.c.lastTs);
+  const bossOwes = mounted
+    ? bosses
+        .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
+        .filter(({ c }) => bossOwesReply(c) && minsAgo(c.lastTs) >= ALERT_MIN)
+        .sort((a, b) => a.c.lastTs - b.c.lastTs)
+    : [];
 
-  const STUCK_MIN = 30;
-  const stuckRaw = bosses
-    .map((b) => ({ b, mins: Math.round(parseDays(b.lastActivity) * 24 * 60) || (b.status === "active" ? 0 : 60) }))
-    .filter(({ b, mins }) => mins >= STUCK_MIN && b.stage !== "Closing" && b.status !== "active")
-    .sort((a, b) => b.mins - a.mins);
+  const candOwes = mounted
+    ? bosses
+        .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
+        .filter(({ c }) => c.status === "open" && lastNonSystemFrom(c) === "boss" && minsAgo(c.lastTs) >= ALERT_MIN)
+        .sort((a, b) => a.c.lastTs - b.c.lastTs)
+    : [];
 
-  // Bosses stuck per stage (for funnel-stage tabs) — anyone in stage with no recent movement
-  const stuckByStage: Record<Stage, { b: Boss; mins: number }[]> = STAGES.reduce((acc, s) => {
-    acc[s] = bosses
-      .filter((b) => b.stage === s)
-      .map((b) => ({ b, mins: Math.round(parseDays(b.lastActivity) * 24 * 60) || 60 }))
+  // Stuck per merged group
+  const stuckByGroup: Record<StageGroup, { b: Boss; mins: number; stage: Stage }[]> = STAGE_GROUPS.reduce((acc, g) => {
+    acc[g] = bosses
+      .filter((b) => stagesIn(g).includes(b.stage))
+      .map((b) => ({ b, stage: b.stage, mins: Math.round(parseDays(b.lastActivity) * 24 * 60) || 60 }))
+      .filter(({ mins }) => mins >= 30)
       .sort((a, b) => b.mins - a.mins);
     return acc;
-  }, {} as Record<Stage, { b: Boss; mins: number }[]>);
+  }, {} as Record<StageGroup, { b: Boss; mins: number; stage: Stage }[]>);
 
-  const negativeChats = bosses
-    .flatMap((b) => b.candidateChats.map((c) => ({ b, c })))
-    .filter(({ c }) => c.status === "closed" && c.closeReason && NEGATIVE_CLOSE.includes(c.closeReason))
-    .sort((a, b) => b.c.lastTs - a.c.lastTs);
+  const stuckTotal = STAGE_GROUPS.reduce((n, g) => n + stuckByGroup[g].length, 0);
 
-  const lowAccept = bosses.filter((b) => b.swipedToDM >= 5 && b.dmAccepted / b.swipedToDM < 0.4);
-  const criticalBosses = bosses.filter((b) => severityOf(b) === "critical");
+  const unhappy = bosses.filter((b) => b.sentiment === "unhappy");
   const healthy = bosses.filter((b) => severityOf(b) === "healthy");
-  const [healthyOpen, setHealthyOpen] = useState(false);
 
-  const totalAlerts = bossOwes.length + candOwes.length + stuckRaw.length + negativeChats.length + criticalBosses.length;
-
-  const baseTabs: { k: TabK; label: string; count: number; tone?: "warn" | "critical" }[] = [
-    { k: "all", label: "All", count: totalAlerts },
-    { k: "no_reply", label: "No reply", count: bossOwes.length + candOwes.length, tone: "critical" },
-    { k: "stuck", label: "Stuck", count: stuckRaw.length },
-    { k: "lost", label: "Lost / at risk", count: negativeChats.length + criticalBosses.length },
-    { k: "happy", label: "Happy", count: healthy.length },
-  ];
   if (bosses.length === 0) return <EmptyHint text="No bosses match the current filters." />;
 
+  const noReplyCount = bossOwes.length + candOwes.length;
   const showAll = tab === "all";
 
+  // Build tab list — All, No reply, Unhappy, then funnel groups with stuck counts
+  const tabs: { k: TabK; label: string; count: number; tone?: "warn" | "critical" }[] = [
+    { k: "all", label: "All", count: noReplyCount + stuckTotal + unhappy.length },
+    { k: "no_reply", label: "No reply", count: noReplyCount, tone: noReplyCount > 0 ? "critical" : undefined },
+    { k: "unhappy", label: "Unhappy", count: unhappy.length, tone: unhappy.length > 0 ? "critical" : undefined },
+    ...STAGE_GROUPS.map((g) => ({ k: g as TabK, label: g, count: stuckByGroup[g].length, tone: stuckByGroup[g].length > 0 ? "warn" as const : undefined })),
+  ];
+
+  const stageDrilldown: StageGroup | null =
+    tab !== "all" && tab !== "no_reply" && tab !== "unhappy" ? (tab as StageGroup) : null;
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {readOnly && (
         <div className="rounded-xl border border-warn/30 bg-warn/5 px-3 py-2 flex items-center gap-2">
           <span className="size-1.5 rounded-full bg-warn" />
@@ -1837,27 +1847,33 @@ function AlertsView({
         </div>
       )}
 
-      {/* Compact alert summary — 4 cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        <AlertSummary tone="critical" label="No reply" count={bossOwes.length + candOwes.length} hint={`${bossOwes.length} boss · ${candOwes.length} candidate · >30m`} delta={+2} />
-        <AlertSummary tone="warning" label="Stuck in funnel" count={stuckRaw.length} hint="Same stage >30m, no movement" delta={+1} />
-        <AlertSummary tone="critical" label="Lost / at risk" count={negativeChats.length + criticalBosses.length} hint="Negative closes, unhappy, ghosted" delta={-1} />
-        <AlertSummary tone="healthy" label="Healthy" count={healthy.length} hint="Active, replying, sentiment good" delta={+3} />
+      {/* Mature 3-stat header — no sparklines, no day-over-day deltas */}
+      <div className="rounded-2xl border border-border bg-surface/60 px-5 py-4">
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex items-center gap-8">
+            <StatCell label="No reply" value={noReplyCount} tone={noReplyCount > 0 ? "critical" : "muted"} />
+            <Divider />
+            <StatCell label="Stuck" value={stuckTotal} tone={stuckTotal > 0 ? "warn" : "muted"} />
+            <Divider />
+            <StatCell label="Unhappy" value={unhappy.length} tone={unhappy.length > 0 ? "critical" : "muted"} />
+          </div>
+          <div className="flex items-center gap-2 text-[11px]">
+            <span className="size-1.5 rounded-full bg-flow" />
+            <span className="text-flow font-semibold">{healthy.length} healthy</span>
+            <span className="text-muted-foreground">/ {bosses.length} in scope</span>
+          </div>
+        </div>
       </div>
 
-      {/* Single tab row — by signal. Use the global Filters bar above for stage/team/vibe. */}
-      <TabBar
-        label="View"
-        tabs={baseTabs}
-        current={tab}
-        onChange={setTab}
-      />
+      {/* Alerts segmenter — replaces the old View bar */}
+      <TabBar label="Alerts" tabs={tabs} current={tab} onChange={setTab} />
 
-      {/* Stage drilldown only when a stage is selected via Filters bar */}
+      {/* Funnel-stage drilldown (merged Onboarding includes Verification) */}
       {stageDrilldown && (
-        <StageDrilldown
-          stage={stageDrilldown}
-          rows={stuckByStage[stageDrilldown]}
+        <MergedStageDrilldown
+          group={stageDrilldown}
+          stages={stagesIn(stageDrilldown)}
+          rows={stuckByGroup[stageDrilldown]}
           onOpen={onOpen}
           readOnly={readOnly}
         />
@@ -1866,110 +1882,116 @@ function AlertsView({
       {(showAll || tab === "no_reply") && (
         <AlertGroup
           tone="critical"
-          title="No reply · boss or candidate"
-          hint={`Boss owes ${bossOwes.length} · candidate owes ${candOwes.length} · all >30m past auto-nudge`}
+          title="No reply"
+          hint={`Boss owes ${bossOwes.length} · candidate owes ${candOwes.length} · already past PN (10m) + WATI (70m)`}
           empty="Every conversation got a reply. ✓"
         >
           {bossOwes.slice(0, 5).map(({ b, c }) => (
-            <BossOweRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} readOnly={readOnly} />
+            <NoReplyRow key={c.id} boss={b} chat={c} side="boss" mins={minsAgo(c.lastTs)} stage={escalationStage(minsAgo(c.lastTs))} onOpenBoss={onOpen} readOnly={readOnly} />
           ))}
           {candOwes.slice(0, 5).map(({ b, c }) => (
-            <ChatAlertRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
+            <NoReplyRow key={c.id} boss={b} chat={c} side="candidate" mins={minsAgo(c.lastTs)} stage={escalationStage(minsAgo(c.lastTs))} onOpenBoss={onOpen} readOnly={readOnly} />
           ))}
-          {(bossOwes.length + candOwes.length) > 10 && (
+          {noReplyCount > 10 && (
             <button
               onClick={() => onChatDrill({ title: "All no-reply chats", chats: [...bossOwes, ...candOwes].map((x) => x.c) })}
               className="text-[11px] text-primary font-semibold hover:underline"
             >
-              View all {bossOwes.length + candOwes.length} →
+              View all {noReplyCount} →
             </button>
           )}
         </AlertGroup>
       )}
 
-      {(showAll || tab === "stuck") && (
-        <AlertGroup tone="warning" title="Bosses stuck in funnel stage" hint="Pick a stage tab below to see steps for that stage" empty="Every boss is moving through the funnel. ✓">
-          {stuckRaw.slice(0, 6).map(({ b, mins }) => (
-            <StuckRow key={b.id} boss={b} mins={mins} onOpen={onOpen} />
-          ))}
-        </AlertGroup>
-      )}
-
-      {(showAll || tab === "stuck") && lowAccept.length > 0 && (
-        <AlertGroup tone="warning" title="Bosses with weak candidate engagement" hint="Less than 40% of swiped candidates are accepting boss DMs" empty="">
-          {lowAccept.map((b) => (
-            <BossAlertRow key={b.id} boss={b} reason={`Only ${Math.round((b.dmAccepted / b.swipedToDM) * 100)}% of ${b.swipedToDM} candidates accepted boss DM`} onOpen={onOpen} />
-          ))}
-        </AlertGroup>
-      )}
-
-      {(showAll || tab === "lost") && (
-        <AlertGroup tone="critical" title="Bosses losing candidates · review reason" hint="Candidates that closed with a negative outcome on this boss" empty="No bosses lost a candidate recently. ✓">
-          {negativeChats.slice(0, 6).map(({ b, c }) => (
-            <NegativeCloseRow key={c.id} boss={b} chat={c} onOpenBoss={onOpen} />
-          ))}
-          {negativeChats.length > 6 && (
-            <button
-              onClick={() => onChatDrill({ title: "Negative closes", chats: negativeChats.map((x) => x.c) })}
-              className="text-[11px] text-primary font-semibold hover:underline"
-            >
-              View all {negativeChats.length} →
-            </button>
-          )}
-        </AlertGroup>
-      )}
-
-      {(showAll || tab === "lost") && criticalBosses.length > 0 && (
-        <AlertGroup tone="critical" title="Bosses at risk" hint="Boss is unhappy, ghosted, or stalled — needs direct outreach" empty="">
-          {criticalBosses.map((b) => (
+      {(showAll || tab === "unhappy") && (
+        <AlertGroup
+          tone="critical"
+          title="Unhappy bosses"
+          hint="Sentiment flagged unhappy — needs a direct call before they churn"
+          empty="No unhappy bosses in scope. ✓"
+        >
+          {unhappy.slice(0, 8).map((b) => (
             <BossAlertRow key={b.id} boss={b} reason={b.alert ?? bossOneLine(b)} onOpen={onOpen} whatsapp={!readOnly} />
           ))}
         </AlertGroup>
       )}
 
-      {(showAll || tab === "happy") && (
-        <section className="rounded-2xl border border-flow/25 bg-flow/[0.03] p-4">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
-              <span className="size-2 rounded-full bg-flow" />
-              <span className="text-[11px] font-bold uppercase tracking-widest text-flow">
-                Bosses going well · {healthy.length}
-              </span>
-              <span className="text-[10px] text-muted-foreground hidden md:inline">· healthy sentiment, replying fast</span>
-            </div>
-            {showAll && healthy.length > 0 && (
-              <button onClick={() => setHealthyOpen((o) => !o)} className="text-[11px] text-flow hover:underline font-semibold">
-                {healthyOpen ? "Collapse" : "Expand"}
-              </button>
-            )}
-          </div>
-          {healthy.length === 0 ? (
-            <div className="text-[11px] text-muted-foreground italic">No healthy bosses in scope yet.</div>
-          ) : showAll && !healthyOpen ? (
-            <div className="flex items-center gap-2 flex-wrap">
-              {healthy.slice(0, 10).map((b) => (
-                <button
-                  key={b.id}
-                  onClick={() => onOpen(b)}
-                  className="flex items-center gap-2 px-2 py-1 rounded-full bg-surface border border-flow/20 hover:border-flow/40 transition-colors"
-                  title={`${b.name} · ${b.company}`}
-                >
-                  <span className="size-5 rounded-full bg-flow/15 text-flow flex items-center justify-center text-[9px] font-bold">{initials(b.name)}</span>
-                  <span className="text-[11px] font-semibold truncate max-w-[120px]">{b.name.split(" ")[0]}</span>
-                </button>
-              ))}
-              {healthy.length > 10 && <span className="text-[10px] text-muted-foreground">+{healthy.length - 10} more</span>}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {healthy.map((b) => <BossCard key={b.id} boss={b} sev="healthy" onOpen={onOpen} compact />)}
-            </div>
-          )}
-        </section>
+      {showAll && stuckTotal > 0 && (
+        <AlertGroup tone="warning" title="Stuck in funnel" hint="Pick a stage above for the playbook + checklist" empty="Every boss is moving through the funnel. ✓">
+          {STAGE_GROUPS.flatMap((g) => stuckByGroup[g]).slice(0, 6).map(({ b, mins, stage }) => (
+            <StuckRow key={b.id} boss={b} mins={mins} onOpen={onOpen} stageOverride={stage} />
+          ))}
+        </AlertGroup>
       )}
     </div>
   );
 }
+
+function StatCell({ label, value, tone }: { label: string; value: number; tone: "critical" | "warn" | "muted" }) {
+  const cls = tone === "critical" ? "text-destructive" : tone === "warn" ? "text-warn" : "text-foreground/40";
+  return (
+    <div>
+      <div className={`text-3xl font-mono font-semibold tabular-nums leading-none ${cls}`}>{value}</div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mt-1.5">{label}</div>
+    </div>
+  );
+}
+
+function Divider() {
+  return <div className="h-8 w-px bg-border" />;
+}
+
+function MergedStageDrilldown({
+  group,
+  stages,
+  rows,
+  onOpen,
+  readOnly,
+}: {
+  group: string;
+  stages: Stage[];
+  rows: { b: Boss; mins: number; stage: Stage }[];
+  onOpen: (b: Boss) => void;
+  readOnly?: boolean;
+}) {
+  // Use the canonical stage's playbook (first in the merged set)
+  const primary = stages[0];
+  return (
+    <section className="rounded-2xl border border-primary/20 bg-surface/40 p-4 space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="size-1.5 rounded-full bg-primary" />
+        <span className="text-[11px] font-bold uppercase tracking-widest text-primary">{group}</span>
+        <span className="text-[10px] text-muted-foreground">
+          · {rows.length} stuck{stages.length > 1 ? ` · includes ${stages.slice(1).join(", ")}` : ""}
+        </span>
+      </div>
+
+      {stages.map((s) => (
+        <div key={s} className="rounded-lg border border-border bg-surface/60 p-3">
+          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-bold mb-2">Playbook · {s}</div>
+          <div className="flex flex-wrap gap-1.5">
+            {STAGE_STEPS[s].map((step, i) => (
+              <span key={i} className="text-[11px] px-2 py-0.5 rounded-md bg-surface-elevated border border-border text-foreground/80">
+                {i + 1}. {step}
+              </span>
+            ))}
+          </div>
+        </div>
+      ))}
+
+      {rows.length === 0 ? (
+        <div className="text-[11px] text-muted-foreground italic">No bosses stuck in {group}. ✓</div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(({ b, mins, stage }) => (
+            <StuckBossWithSteps key={b.id} boss={b} stage={stage} mins={mins} onOpen={onOpen} readOnly={readOnly} />
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 
 /* ---------- Tab bar with label prefix ---------- */
 function TabBar<T extends string>({
