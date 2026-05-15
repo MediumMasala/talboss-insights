@@ -113,12 +113,12 @@ export interface Boss {
 }
 
 export const STAGES: Stage[] = [
-  "Onboarding",
+  "Identity",
+  "Personality",
+  "Job Setup",
   "Verification",
-  "Job Creation",
   "Talking",
-  "Interview",
-  "Hiring",
+  "Chatting",
   "Closing",
 ];
 
