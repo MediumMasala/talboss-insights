@@ -370,7 +370,7 @@ function Dashboard() {
             }
           />
 
-          {stageFilter === "Interview" && (section === "overview" || section === "chats") && (
+          {stageFilter === "Chatting" && (section === "overview" || section === "chats") && (
             <InterviewChannelTabs value={interviewChannel} onChange={setInterviewChannel} bosses={filtered} />
           )}
 
