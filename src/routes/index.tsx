@@ -1829,9 +1829,9 @@ function AlertsView({
   // Build tab list — All, No reply, Unhappy, then funnel groups with stuck counts
   const tabs: { k: TabK; label: string; count: number; tone?: "warn" | "critical" }[] = [
     { k: "all", label: "All", count: noReplyCount + stuckTotal + unhappy.length },
+    ...STAGE_GROUPS.map((g) => ({ k: g as TabK, label: g, count: stuckByGroup[g].length, tone: stuckByGroup[g].length > 0 ? "warn" as const : undefined })),
     { k: "no_reply", label: "No reply", count: noReplyCount, tone: noReplyCount > 0 ? "critical" : undefined },
     { k: "unhappy", label: "Unhappy", count: unhappy.length, tone: unhappy.length > 0 ? "critical" : undefined },
-    ...STAGE_GROUPS.map((g) => ({ k: g as TabK, label: g, count: stuckByGroup[g].length, tone: stuckByGroup[g].length > 0 ? "warn" as const : undefined })),
   ];
 
   const stageDrilldown: StageGroup | null =
