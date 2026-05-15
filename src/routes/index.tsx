@@ -36,13 +36,13 @@ type SearchScope = "all" | "name" | "company" | "id" | "location" | "owner";
 
 /* ---------- Funnel stage playbooks (steps to follow per stage) ---------- */
 const STAGE_STEPS: Record<Stage, string[]> = {
-  Onboarding: ["App installed", "Phone & email confirmed", "Company & role added", "Profile photo uploaded"],
-  Verification: ["LinkedIn URL submitted", "Work email verified (OTP)", "Company domain matched", "Verified badge granted"],
-  "Job Creation": ["Role title & seniority set", "JD written (≥80 words)", "Comp & location set", "Role published to candidates"],
-  Talking: ["Boss DM sent to shortlist", "Candidate accepted DM", "Reply within 2h", "Call / interview proposed"],
-  Interview: ["Interview slot confirmed", "Interviewer brief shared", "Interview completed", "Feedback submitted ≤24h"],
-  Hiring: ["Offer terms aligned with boss", "Offer letter generated", "Candidate verbal accept", "Written offer sent"],
-  Closing: ["Offer accepted in app", "Joining date locked", "BGV started", "Candidate marked onboarded"],
+  Identity: ["Name added", "Company & role added", "LinkedIn confirmed", "Phone & email confirmed"],
+  Personality: ["Photos uploaded", "Prompts answered", "AI stack added", "tal.af/workwith page live"],
+  "Job Setup": ["Job title set", "Role & seniority", "Salary & comp", "Location & type"],
+  Verification: ["Work email submitted", "OTP confirmed", "Domain matched", "Verified badge granted"],
+  Talking: ["Shortlist surfaced", "Intro DM sent", "Candidate accepted DM", "First reply within 2h"],
+  Chatting: ["Resume shared", "Slots shared", "Call/interview held", "Feedback captured"],
+  Closing: ["Match outcome given", "Chat closed with reason", "Hire/no-hire logged", "Slot freed (≤10 open)"],
 };
 
 // Deterministic "done" ticks per boss/stage so demo feels real
