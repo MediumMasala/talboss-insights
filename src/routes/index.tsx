@@ -296,7 +296,7 @@ function Dashboard() {
   const alerts = alertBosses.length;
 
   const interviewFiltered = useMemo(() => {
-    if (stageFilter !== "Interview" || interviewChannel === "all") return filtered;
+    if (stageFilter !== "Chatting" || interviewChannel === "all") return filtered;
     return filtered.filter((b) =>
       b.candidateChats.some((c) => c.interviewChannel === interviewChannel),
     );
