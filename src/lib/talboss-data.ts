@@ -1,10 +1,10 @@
 export type Stage =
-  | "Onboarding"
+  | "Identity"
+  | "Personality"
+  | "Job Setup"
   | "Verification"
-  | "Job Creation"
   | "Talking"
-  | "Interview"
-  | "Hiring"
+  | "Chatting"
   | "Closing";
 
 export type ChatStatus = "active" | "idle" | "no_reply" | "closed";
