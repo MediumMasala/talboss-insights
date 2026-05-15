@@ -209,6 +209,18 @@ function useLiveTick(intervalMs = 3500): number {
   return tick;
 }
 
+/** Returns 0 on SSR / first paint, then real Date.now() once mounted (refreshed every minute).
+ *  Use this anywhere a count depends on "minutes ago" so server & client agree on first render. */
+function useClientNow(): number {
+  const [now, setNow] = useState(0);
+  useEffect(() => {
+    setNow(Date.now());
+    const id = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(id);
+  }, []);
+  return now;
+}
+
 function jitter(seed: string, tick: number): number {
   let s = tick + 1;
   for (let i = 0; i < seed.length; i++) s = (s * 31 + seed.charCodeAt(i)) | 0;
