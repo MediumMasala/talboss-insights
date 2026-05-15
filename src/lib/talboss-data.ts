@@ -356,7 +356,7 @@ export const BOSSES: Boss[] = [
     role: "Founder",
     location: "Pune",
     verified: false,
-    stage: "Identity",
+    stage: "Personality",
     status: "active",
     sentiment: "happy",
     rolesOpen: 1,
