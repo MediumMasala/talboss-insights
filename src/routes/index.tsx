@@ -242,7 +242,7 @@ function LiveNumber({ value, seed, kind = "int" }: { value: number; seed: string
 }
 
 /* ---------- 5-dot chat journey ---------- */
-const CHAT_JOURNEY = ["Matched", "Talking", "Interview", "Offer", "Closed"] as const;
+const CHAT_JOURNEY = ["Matched", "Talking", "Chatting", "Closing", "Closed"] as const;
 function chatJourneyIndex(c: CandidateChat): number {
   if (c.status === "closed") return 4;
   const msgs = c.messages?.length ?? 0;
