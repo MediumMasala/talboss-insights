@@ -541,7 +541,7 @@ function TrackerPanel({
   const active = bosses.filter((b) => b.status === "active");
   const idle = bosses.filter((b) => b.status === "idle");
   const noReply = bosses.filter((b) => b.status === "no_reply");
-  const onboarded = bosses.filter((b) => b.stage !== "Onboarding");
+  const onboarded = bosses.filter((b) => b.stage !== "Identity" && b.stage !== "Personality");
   const verified = bosses.filter((b) => b.verified);
   const allChats = bosses.flatMap((b) => b.candidateChats);
   const closedChats = allChats.filter((c) => c.status === "closed");
