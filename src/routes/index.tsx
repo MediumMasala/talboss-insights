@@ -2250,7 +2250,8 @@ function ChatAlertRow({ boss, chat, onOpenBoss }: { boss: Boss; chat: CandidateC
   );
 }
 
-function StuckRow({ boss, mins, onOpen }: { boss: Boss; mins: number; onOpen: (b: Boss) => void }) {
+function StuckRow({ boss, mins, onOpen, stageOverride }: { boss: Boss; mins: number; onOpen: (b: Boss) => void; stageOverride?: Stage }) {
+  const stage = stageOverride ?? boss.stage;
   return (
     <div className="flex items-center gap-3 p-3 rounded-xl border border-warn/30 bg-warn/5">
       <div className="size-10 rounded-full bg-surface border border-border flex items-center justify-center text-xs font-bold shrink-0">
@@ -2261,10 +2262,51 @@ function StuckRow({ boss, mins, onOpen }: { boss: Boss; mins: number; onOpen: (b
           {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
         </div>
         <div className="text-[11px] text-muted-foreground truncate">
-          Stuck in <span className="font-semibold text-foreground">{boss.stage}</span> for {fmtSince(mins)}
+          Stuck in <span className="font-semibold text-foreground">{stage}</span> for {fmtSince(mins)}
         </div>
       </button>
       <WhatsAppBtn />
+    </div>
+  );
+}
+
+function NoReplyRow({
+  boss, chat, side, mins, stage, onOpenBoss, readOnly,
+}: {
+  boss: Boss;
+  chat: CandidateChat;
+  side: "boss" | "candidate";
+  mins: number;
+  stage: "pn" | "wati" | "stale";
+  onOpenBoss: (b: Boss) => void;
+  readOnly?: boolean;
+}) {
+  const stageLabel =
+    stage === "stale" ? "WATI sent · still no reply" :
+    stage === "wati"  ? "WATI auto-sent" :
+                        "PN sent";
+  const sideLabel = side === "boss" ? "Boss owes reply" : "Candidate owes reply";
+  const sideTone = side === "boss"
+    ? "text-destructive border-destructive/30 bg-destructive/10"
+    : "text-warn border-warn/30 bg-warn/10";
+  return (
+    <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-surface/60">
+      <div className={`size-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${side === "boss" ? "bg-destructive/10 text-destructive" : "bg-warn/10 text-warn"}`}>
+        {initials(side === "boss" ? boss.name : chat.candidateName)}
+      </div>
+      <button onClick={() => onOpenBoss(boss)} className="flex-1 min-w-0 text-left">
+        <div className="font-semibold text-sm truncate">
+          {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
+        </div>
+        <div className="text-[11px] text-muted-foreground truncate">
+          {side === "boss" ? "Owes" : "Awaiting"} <span className="font-semibold text-foreground">{chat.candidateName}</span> on {chat.forRole} · last msg {fmtSince(mins)} · "{chat.lastMessage}"
+        </div>
+      </button>
+      <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
+        <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${sideTone}`}>{sideLabel}</span>
+        <span className="text-[9px] text-muted-foreground font-mono">{stageLabel}</span>
+      </div>
+      {!readOnly && <WhatsAppBtn label={side === "boss" ? "Nudge boss" : "Nudge cand"} />}
     </div>
   );
 }
