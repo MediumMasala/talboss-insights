@@ -593,15 +593,61 @@ function TrackerPanel({
     moves.push({ from: STAGES[i], to: STAGES[i + 1], n });
   }
 
-  type TrackerTab = "today" | "funnel" | "outcomes" | "team";
+  type TrackerTab = "today" | "marketplace" | "funnel" | "outcomes" | "team";
   const [tab, setTab] = useState<TrackerTab>("today");
 
   const tabs: { k: TrackerTab; label: string; hint: string }[] = [
     { k: "today", label: "Today", hint: "What changed in the last 24h" },
+    { k: "marketplace", label: "Marketplace", hint: "Demand · Supply · liquidity" },
     { k: "funnel", label: "Funnel", hint: "Stages, cleared vs stuck" },
     { k: "outcomes", label: "Outcomes", hint: "Hires, closes, conversion" },
     { k: "team", label: "Team", hint: "Owner load + channels" },
   ];
+
+  // ---- Marketplace metrics (synthetic, derived from current data) ----
+  const totalChats = totalOpenChats + totalClosedChats;
+  const sessions = Math.max(totalChats, Math.round(bosses.length * 7.4)); // candidate browse sessions
+  const bossReplies = allChats.reduce(
+    (s, c) => s + (c.messages?.filter((m) => m.from === "boss").length ?? 0),
+    0,
+  );
+  const meetingsSet = allChats.filter((c) =>
+    c.messages?.some((m) => /slot|meet|interview|call|calendly/i.test(m.text)),
+  ).length;
+  const chatsPerSession = (totalChats / sessions).toFixed(2);
+  const repliesPerChat = totalChats ? Math.round((bossReplies / totalChats) * 100) : 0;
+  const repliesPerSession = (bossReplies / sessions).toFixed(2);
+  const meetingsPerChat = bossReplies ? Math.round((meetingsSet / bossReplies) * 100) : 0;
+  const spinnerMins = 14 + (bosses.length % 11); // synthetic median wait
+  const timeToFirstMatchBossH = 3 + (bosses.length % 5);
+  const timeToFirstMatchCandH = 1 + (bosses.length % 3);
+
+  // Demand
+  const newCandidates = Math.round(sessions * 0.18);
+  const monthlyActiveCandidates = Math.round(sessions * 0.62);
+  const chatsPerCandidate = (totalChats / Math.max(1, monthlyActiveCandidates)).toFixed(2);
+  const w4Retention = 38 + (bosses.length % 9);
+
+  // Supply
+  const newBosses = bosses.filter((b) => STAGES.indexOf(b.stage) <= 2).length;
+  const monthlyActiveBosses = active.length + idle.length;
+  const meetingsPerBoss = (meetingsSet / Math.max(1, bosses.length)).toFixed(2);
+  const monthlyBossChurn = Math.max(2, Math.round((noReply.length / Math.max(1, bosses.length)) * 100 * 0.4));
+  const bossAcceptRate = dmAcceptRate;
+
+  // Candidate → hire funnel (synthetic counts that taper)
+  const mpFunnel = [
+    { label: "Opens Tal", n: sessions },
+    { label: "Sees boss cards", n: Math.round(sessions * 0.92) },
+    { label: "Sends intro", n: totalChats },
+    { label: "Boss replies", n: bossReplies },
+    { label: "Chat opens", n: allChats.filter((c) => c.status !== "closed" || c.messages?.length).length },
+    { label: "Resume / slots shared", n: meetingsSet + Math.round(bossReplies * 0.3) },
+    { label: "Meeting scheduled", n: meetingsSet },
+    { label: "Meeting completed", n: Math.round(meetingsSet * 0.78) },
+    { label: "Hire", n: totalHired },
+  ];
+  const mpMax = Math.max(1, ...mpFunnel.map((f) => f.n));
 
   return (
     <div className="space-y-4">
@@ -661,7 +707,72 @@ function TrackerPanel({
         </div>
       )}
 
-      {/* FUNNEL */}
+      {/* MARKETPLACE */}
+      {tab === "marketplace" && (
+        <div className="space-y-4">
+          <SectionPanel title="Marketplace metrics" hint="Liquidity between candidates and bosses">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+              <KPI label="Chats / session" value={chatsPerSession} sub={`${totalChats} chats · ${sessions} sessions`} series={seedSeries("cps", 14, Number(chatsPerSession) * 30)} />
+              <KPI label="Replies / chat" value={`${repliesPerChat}%`} sub={`${bossReplies} boss replies`} tone="flow" series={seedSeries("rpc", 14, repliesPerChat)} />
+              <KPI label="Replies / session" value={repliesPerSession} sub={`${bossReplies} / ${sessions}`} series={seedSeries("rps", 14, Number(repliesPerSession) * 30)} />
+              <KPI label="Meetings / reply" value={`${meetingsPerChat}%`} sub={`${meetingsSet} meetings set`} tone="flow" series={seedSeries("mpc", 14, meetingsPerChat)} />
+              <KPI label="Spinner · median" value={`${spinnerMins}m`} sub="candidate msg → boss reply" tone="warn" series={seedSeries("spin", 14, spinnerMins * 2)} />
+              <KPI label="TTFM · boss" value={`${timeToFirstMatchBossH}h`} sub="first candidate ping" series={seedSeries("ttfb", 14, timeToFirstMatchBossH * 5)} />
+              <KPI label="TTFM · candidate" value={`${timeToFirstMatchCandH}h`} sub="first boss reply" series={seedSeries("ttfc", 14, timeToFirstMatchCandH * 5)} />
+              <KPI label="DM accept" value={`${dmAcceptRate}%`} sub={`${dms} / ${swipes}`} series={seedSeries("dma", 14, dmAcceptRate)} />
+            </div>
+          </SectionPanel>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <SectionPanel title="Demand · candidates" hint="Top of marketplace">
+              <div className="grid grid-cols-2 gap-2">
+                <KPI label="New candidates" value={newCandidates} series={seedSeries("nc", 14, newCandidates)} />
+                <KPI label="Monthly active" value={monthlyActiveCandidates} sub="MAC" tone="flow" series={seedSeries("mac", 14, monthlyActiveCandidates)} />
+                <KPI label="Engagement" value={chatsPerCandidate} sub="chats / candidate" series={seedSeries("eng", 14, Number(chatsPerCandidate) * 30)} />
+                <KPI label="W4 retention" value={`${w4Retention}%`} sub="week-4 active" tone="flow" series={seedSeries("w4", 14, w4Retention)} />
+              </div>
+            </SectionPanel>
+
+            <SectionPanel title="Supply · bosses" hint="Other side of marketplace">
+              <div className="grid grid-cols-2 gap-2">
+                <KPI label="New bosses" value={newBosses} series={seedSeries("nb", 14, newBosses * 3)} />
+                <KPI label="Monthly active" value={monthlyActiveBosses} sub="MAB" tone="flow" series={seedSeries("mab", 14, monthlyActiveBosses * 3)} />
+                <KPI label="Meetings / boss" value={meetingsPerBoss} series={seedSeries("mpb", 14, Number(meetingsPerBoss) * 30)} />
+                <KPI label="Monthly churn" value={`${monthlyBossChurn}%`} tone="warn" series={seedSeries("churn", 14, monthlyBossChurn)} />
+                <KPI label="Acceptance rate" value={`${bossAcceptRate}%`} sub="boss → DM accept" tone="flow" series={seedSeries("bar", 14, bossAcceptRate)} />
+              </div>
+            </SectionPanel>
+          </div>
+
+          <SectionPanel title="Candidate → hire funnel" hint="Opens Tal → boss card → intro → reply → chat → slots → meeting → hire">
+            <div className="space-y-1.5">
+              {mpFunnel.map((f, i) => {
+                const w = Math.round((f.n / mpMax) * 100);
+                const prev = i > 0 ? mpFunnel[i - 1].n : f.n;
+                const conv = prev ? Math.round((f.n / prev) * 100) : 100;
+                return (
+                  <div key={f.label} className="flex items-center gap-3 text-[11px]">
+                    <span className="w-40 truncate text-foreground/80 font-semibold">{f.label}</span>
+                    <div className="flex-1 h-6 bg-surface rounded-md overflow-hidden border border-border relative">
+                      <div
+                        className={`h-full ${i === mpFunnel.length - 1 ? "bg-flow/80" : "bg-primary/70"}`}
+                        style={{ width: `${Math.max(4, w)}%` }}
+                      />
+                      <span className="absolute inset-0 flex items-center px-2 font-mono font-bold tabular-nums">{f.n}</span>
+                    </div>
+                    <span className={`w-12 text-right font-mono ${i === 0 ? "text-muted-foreground/50" : conv >= 50 ? "text-flow" : conv >= 25 ? "text-warn" : "text-destructive"}`}>
+                      {i === 0 ? "—" : `${conv}%`}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-3">
+              Right column shows step-to-step conversion. Biggest drops are where ops should focus playbooks.
+            </div>
+          </SectionPanel>
+        </div>
+      )}
       {tab === "funnel" && (
         <div className="space-y-4">
           <SectionPanel title="Funnel · stages" hint="Width = bosses who reached the stage · click cleared / stuck to drill in">
