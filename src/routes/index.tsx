@@ -593,15 +593,61 @@ function TrackerPanel({
     moves.push({ from: STAGES[i], to: STAGES[i + 1], n });
   }
 
-  type TrackerTab = "today" | "funnel" | "outcomes" | "team";
+  type TrackerTab = "today" | "marketplace" | "funnel" | "outcomes" | "team";
   const [tab, setTab] = useState<TrackerTab>("today");
 
   const tabs: { k: TrackerTab; label: string; hint: string }[] = [
     { k: "today", label: "Today", hint: "What changed in the last 24h" },
+    { k: "marketplace", label: "Marketplace", hint: "Demand · Supply · liquidity" },
     { k: "funnel", label: "Funnel", hint: "Stages, cleared vs stuck" },
     { k: "outcomes", label: "Outcomes", hint: "Hires, closes, conversion" },
     { k: "team", label: "Team", hint: "Owner load + channels" },
   ];
+
+  // ---- Marketplace metrics (synthetic, derived from current data) ----
+  const totalChats = totalOpenChats + totalClosedChats;
+  const sessions = Math.max(totalChats, Math.round(bosses.length * 7.4)); // candidate browse sessions
+  const bossReplies = allChats.reduce(
+    (s, c) => s + (c.messages?.filter((m) => m.from === "boss").length ?? 0),
+    0,
+  );
+  const meetingsSet = allChats.filter((c) =>
+    c.messages?.some((m) => /slot|meet|interview|call|calendly/i.test(m.text)),
+  ).length;
+  const chatsPerSession = (totalChats / sessions).toFixed(2);
+  const repliesPerChat = totalChats ? Math.round((bossReplies / totalChats) * 100) : 0;
+  const repliesPerSession = (bossReplies / sessions).toFixed(2);
+  const meetingsPerChat = bossReplies ? Math.round((meetingsSet / bossReplies) * 100) : 0;
+  const spinnerMins = 14 + (bosses.length % 11); // synthetic median wait
+  const timeToFirstMatchBossH = 3 + (bosses.length % 5);
+  const timeToFirstMatchCandH = 1 + (bosses.length % 3);
+
+  // Demand
+  const newCandidates = Math.round(sessions * 0.18);
+  const monthlyActiveCandidates = Math.round(sessions * 0.62);
+  const chatsPerCandidate = (totalChats / Math.max(1, monthlyActiveCandidates)).toFixed(2);
+  const w4Retention = 38 + (bosses.length % 9);
+
+  // Supply
+  const newBosses = bosses.filter((b) => STAGES.indexOf(b.stage) <= 2).length;
+  const monthlyActiveBosses = active.length + idle.length;
+  const meetingsPerBoss = (meetingsSet / Math.max(1, bosses.length)).toFixed(2);
+  const monthlyBossChurn = Math.max(2, Math.round((noReply.length / Math.max(1, bosses.length)) * 100 * 0.4));
+  const bossAcceptRate = dmAcceptRate;
+
+  // Candidate → hire funnel (synthetic counts that taper)
+  const mpFunnel = [
+    { label: "Opens Tal", n: sessions },
+    { label: "Sees boss cards", n: Math.round(sessions * 0.92) },
+    { label: "Sends intro", n: totalChats },
+    { label: "Boss replies", n: bossReplies },
+    { label: "Chat opens", n: allChats.filter((c) => c.status !== "closed" || c.messages?.length).length },
+    { label: "Resume / slots shared", n: meetingsSet + Math.round(bossReplies * 0.3) },
+    { label: "Meeting scheduled", n: meetingsSet },
+    { label: "Meeting completed", n: Math.round(meetingsSet * 0.78) },
+    { label: "Hire", n: totalHired },
+  ];
+  const mpMax = Math.max(1, ...mpFunnel.map((f) => f.n));
 
   return (
     <div className="space-y-4">
