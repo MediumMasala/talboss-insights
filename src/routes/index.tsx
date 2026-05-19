@@ -662,6 +662,11 @@ function TrackerPanel({
         </div>
       )}
 
+      {/* MARKETPLACE */}
+      {tab === "marketplace" && (
+        <MarketplaceTab bosses={bosses} />
+      )}
+
       {/* FUNNEL */}
       {tab === "funnel" && (
         <div className="space-y-4">
