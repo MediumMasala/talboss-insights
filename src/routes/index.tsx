@@ -593,11 +593,12 @@ function TrackerPanel({
     moves.push({ from: STAGES[i], to: STAGES[i + 1], n });
   }
 
-  type TrackerTab = "today" | "funnel" | "outcomes" | "team";
+  type TrackerTab = "today" | "marketplace" | "funnel" | "outcomes" | "team";
   const [tab, setTab] = useState<TrackerTab>("today");
 
   const tabs: { k: TrackerTab; label: string; hint: string }[] = [
     { k: "today", label: "Today", hint: "What changed in the last 24h" },
+    { k: "marketplace", label: "Marketplace", hint: "Demand · supply · liquidity" },
     { k: "funnel", label: "Funnel", hint: "Stages, cleared vs stuck" },
     { k: "outcomes", label: "Outcomes", hint: "Hires, closes, conversion" },
     { k: "team", label: "Team", hint: "Owner load + channels" },
@@ -659,6 +660,11 @@ function TrackerPanel({
             </ul>
           </SectionPanel>
         </div>
+      )}
+
+      {/* MARKETPLACE */}
+      {tab === "marketplace" && (
+        <MarketplaceTab bosses={bosses} />
       )}
 
       {/* FUNNEL */}
@@ -798,6 +804,149 @@ function TrackerPanel({
     </div>
   );
 }
+
+/* ---------- Marketplace tracker tab (Marketplace · Demand · Supply + candidate→hire funnel) ---------- */
+function MarketplaceTab({ bosses }: { bosses: Boss[] }) {
+  // Seeded helpers so numbers feel real but stay stable across renders
+  const seed = (s: string, mod = 100) => {
+    let h = 0;
+    for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+    return Math.abs(h) % mod;
+  };
+
+  const allChats = bosses.flatMap((b) => b.candidateChats);
+  const totalChats = allChats.length;
+  const repliedChats = allChats.filter((c) => {
+    const msgs = c.messages ?? [];
+    return msgs.some((m) => m.from === "boss");
+  }).length;
+  const meetingsSet = allChats.filter((c) => (c.messages?.length ?? 0) >= 5).length;
+  const meetingsDone = allChats.filter((c) => c.status === "closed" && (c.messages?.length ?? 0) >= 6).length;
+  const hires = bosses.reduce((s, b) => s + b.hired, 0);
+
+  // Synthetic-but-stable session/candidate counts
+  const candidateBrowseSessions = 1240 + seed("sessions", 220);
+  const newCandidates = 86 + seed("newcand", 30);
+  const newBosses = 18 + seed("newboss", 12);
+  const monthlyActiveCandidates = 520 + seed("mac", 80);
+  const monthlyActiveBosses = bosses.length + seed("mab", 25);
+  const w4Retention = 38 + seed("w4", 12); // %
+  const monthlyBossChurn = 6 + seed("churn", 5); // %
+  const avgSpinnerMin = 42 + seed("spin", 35); // minutes
+  const ttfmCandidateHr = 4 + seed("ttfmc", 8); // hours
+  const ttfmBossHr = 12 + seed("ttfmb", 14); // hours
+
+  const chatsPerSession = candidateBrowseSessions ? (totalChats / candidateBrowseSessions) : 0;
+  const repliesPerChat = totalChats ? repliedChats / totalChats : 0;
+  const repliesPerSession = candidateBrowseSessions ? repliedChats / candidateBrowseSessions : 0;
+  const meetingsPerChat = repliedChats ? meetingsSet / repliedChats : 0;
+  const chatsPerCandidate = monthlyActiveCandidates ? totalChats / monthlyActiveCandidates : 0;
+  const meetingsPerBoss = bosses.length ? meetingsSet / bosses.length : 0;
+  const bossAcceptRate = (() => {
+    const swipes = bosses.reduce((s, b) => s + b.swipedToDM, 0);
+    const dms = bosses.reduce((s, b) => s + b.dmAccepted, 0);
+    return swipes ? Math.round((dms / swipes) * 100) : 0;
+  })();
+
+  // Candidate → hire funnel
+  const opens = candidateBrowseSessions;
+  const seesCards = Math.round(opens * 0.92);
+  const sendsIntro = totalChats + Math.round(opens * 0.04);
+  const bossReplied = repliedChats + Math.round(opens * 0.015);
+  const chatOpened = repliedChats;
+  const sharedResumeOrSlots = Math.round(chatOpened * 0.78);
+  const meetingScheduled = meetingsSet;
+  const meetingCompleted = meetingsDone;
+  const hireHappened = hires;
+
+  const funnelSteps = [
+    { label: "Candidate opens Tal", value: opens },
+    { label: "Sees boss cards", value: seesCards },
+    { label: "Sends intro", value: sendsIntro },
+    { label: "Boss replies", value: bossReplied },
+    { label: "Chat opens", value: chatOpened },
+    { label: "Resume / slots shared", value: sharedResumeOrSlots },
+    { label: "Meeting scheduled", value: meetingScheduled },
+    { label: "Meeting completed", value: meetingCompleted },
+    { label: "Hire", value: hireHappened },
+  ];
+  const funnelTop = Math.max(1, funnelSteps[0].value);
+
+  return (
+    <div className="space-y-4">
+      <SectionPanel title="Marketplace metrics" hint="Liquidity · chat-level conversion · response time">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-2">
+          <KPI label="Chats / session" value={chatsPerSession.toFixed(2)} sub={`${totalChats} chats · ${candidateBrowseSessions} sessions`} series={seedSeries("cps", 14, Math.round(chatsPerSession * 60))} />
+          <KPI label="Replies / chat" value={`${Math.round(repliesPerChat * 100)}%`} sub={`${repliedChats} / ${totalChats}`} tone="flow" series={seedSeries("rpc", 14, Math.round(repliesPerChat * 100))} />
+          <KPI label="Replies / session" value={repliesPerSession.toFixed(2)} sub={`${repliedChats} replies`} series={seedSeries("rps", 14, Math.round(repliesPerSession * 80))} />
+          <KPI label="Meetings / chats" value={`${Math.round(meetingsPerChat * 100)}%`} sub={`${meetingsSet} of ${repliedChats} replied`} tone="flow" series={seedSeries("mpc", 14, Math.round(meetingsPerChat * 100))} />
+          <KPI label="Spinners (avg)" value={`${avgSpinnerMin}m`} sub="candidate msg → boss reply" tone="warn" series={seedSeries("spin", 14, avgSpinnerMin)} />
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mt-2">
+          <KPI label="TTFM · candidate" value={`${ttfmCandidateHr}h`} sub="time to first boss ping/reply" series={seedSeries("ttfmc", 14, ttfmCandidateHr * 4)} />
+          <KPI label="TTFM · boss" value={`${ttfmBossHr}h`} sub="time to first candidate ping" series={seedSeries("ttfmb", 14, ttfmBossHr * 3)} />
+        </div>
+      </SectionPanel>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <SectionPanel title="Demand · candidates" hint="Who's showing up on the candidate side">
+          <div className="grid grid-cols-2 gap-2">
+            <KPI label="New candidates" value={newCandidates} sub="this month" series={seedSeries("ncand", 14, newCandidates)} />
+            <KPI label="Monthly active" value={monthlyActiveCandidates} sub="MAC" tone="flow" series={seedSeries("mac", 14, monthlyActiveCandidates / 6)} />
+            <KPI label="Engagement" value={chatsPerCandidate.toFixed(2)} sub="chats / candidate" series={seedSeries("eng", 14, Math.round(chatsPerCandidate * 30))} />
+            <KPI label="W4 retention" value={`${w4Retention}%`} sub="still active after 4 weeks" tone="flow" series={seedSeries("w4", 14, w4Retention)} />
+          </div>
+        </SectionPanel>
+
+        <SectionPanel title="Supply · bosses" hint="Who's showing up on the hiring side">
+          <div className="grid grid-cols-2 gap-2">
+            <KPI label="New bosses" value={newBosses} sub="this month" series={seedSeries("nboss", 14, newBosses * 3)} />
+            <KPI label="Monthly active" value={monthlyActiveBosses} sub="MAB" tone="flow" series={seedSeries("mab", 14, monthlyActiveBosses)} />
+            <KPI label="Meetings / boss" value={meetingsPerBoss.toFixed(2)} sub={`${meetingsSet} meetings`} series={seedSeries("mpb", 14, Math.round(meetingsPerBoss * 25))} />
+            <KPI label="Monthly churn" value={`${monthlyBossChurn}%`} sub="bosses dropped off" tone="warn" series={seedSeries("churn", 14, monthlyBossChurn * 4)} />
+            <KPI label="Boss acceptance" value={`${bossAcceptRate}%`} sub="swipe → DM accept" tone="flow" series={seedSeries("bar", 14, bossAcceptRate)} />
+          </div>
+        </SectionPanel>
+      </div>
+
+      <SectionPanel title="Candidate → hire funnel" hint="From open to hire across the whole marketplace">
+        <div className="space-y-1.5">
+          {funnelSteps.map((s, i) => {
+            const prev = i === 0 ? s.value : funnelSteps[i - 1].value;
+            const widthPct = Math.max(6, (s.value / funnelTop) * 100);
+            const stepConv = prev ? Math.round((s.value / prev) * 100) : 0;
+            return (
+              <div key={s.label} className="flex items-center gap-3">
+                <div className="w-44 shrink-0">
+                  <div className="text-[11px] font-semibold truncate">{s.label}</div>
+                  <div className="text-[9px] text-muted-foreground font-mono">{s.value.toLocaleString()}</div>
+                </div>
+                <div className="flex-1 h-7 bg-surface rounded-md overflow-hidden border border-border relative">
+                  <div
+                    className="h-full bg-primary/30 border-r border-primary/50 transition-all"
+                    style={{ width: `${widthPct}%` }}
+                  />
+                  <span className="absolute inset-0 flex items-center px-2 text-[10px] font-mono font-bold text-foreground/90">
+                    {s.value.toLocaleString()}
+                  </span>
+                </div>
+                <div className="w-14 text-right shrink-0 text-[10px] font-mono text-muted-foreground">
+                  {i === 0 ? "—" : `${stepConv}%`}
+                </div>
+              </div>
+            );
+          })}
+          <div className="flex items-center gap-3 pt-2 text-[10px] text-muted-foreground">
+            <span>Right column = step-over-step conversion</span>
+            <span className="ml-auto">Overall open → hire: {opens ? ((hireHappened / opens) * 100).toFixed(2) : 0}%</span>
+          </div>
+        </div>
+      </SectionPanel>
+    </div>
+  );
+}
+
+
 
 function SectionPanel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
