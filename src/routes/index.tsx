@@ -152,6 +152,18 @@ function bossOneLine(b: Boss): string {
   return `${b.stage} · ${progressing} of ${total || progressing} progressing · last reply ${lastTxt}`;
 }
 
+function unhappyReason(b: Boss): string {
+  if (b.alert) return b.alert;
+  // Most recent negative close reason on any of their chats
+  const closed = b.candidateChats
+    .filter((c) => c.status === "closed" && c.closeReason)
+    .sort((a, z) => z.lastTs - a.lastTs)[0];
+  if (closed?.closeReason) return `Closed "${closed.candidateName}" — ${closed.closeReason}`;
+  const days = parseDays(b.lastActivity);
+  if (days >= 3) return `Silent ${Math.round(days)}d after a bad experience`;
+  if (b.notHired > 0 && b.hired === 0) return `${b.notHired} rejections, 0 hires — losing faith in the pool`;
+  return `Sentiment flagged unhappy — needs a direct call`;
+}
 function ctaForBoss(b: Boss): { label: string; tone: "primary" | "warn" | "destructive" } {
   if (b.status === "no_reply" || (b.alert && /no reply|ghost/i.test(b.alert))) {
     return { label: "Send nudge", tone: "destructive" };
@@ -1920,11 +1932,14 @@ function AlertsView({
   readOnly?: boolean;
   stageFilter?: Stage | "all";
 }) {
-  // Funnel groups for the alerts strip — Identity + Personality + Verification clubbed under Onboarding
-  type StageGroup = "Onboarding" | "Job Setup" | "Talking" | "Chatting" | "Closing";
-  const STAGE_GROUPS: StageGroup[] = ["Onboarding", "Job Setup", "Talking", "Chatting", "Closing"];
+  // Funnel groups for the alerts strip — Identity + Personality + Verification clubbed under Onboarding;
+  // Talking + Chatting merged under a single "Talking" group (same conversation surface)
+  type StageGroup = "Onboarding" | "Job Setup" | "Talking" | "Closing";
+  const STAGE_GROUPS: StageGroup[] = ["Onboarding", "Job Setup", "Talking", "Closing"];
   const stagesIn = (g: StageGroup): Stage[] =>
-    g === "Onboarding" ? ["Identity", "Personality", "Verification"] : [g as Stage];
+    g === "Onboarding" ? ["Identity", "Personality", "Verification"] :
+    g === "Talking" ? ["Talking", "Chatting"] :
+    [g as Stage];
 
   type TabK = "all" | "no_reply" | "unhappy" | StageGroup;
   const [tab, setTab] = useState<TabK>("all");
@@ -2032,7 +2047,7 @@ function AlertsView({
         <AlertGroup
           tone="critical"
           title="No reply"
-          hint={`Boss owes ${bossOwes.length} · candidate owes ${candOwes.length} · already past PN (10m) + WATI (70m)`}
+          hint={`Boss owes ${bossOwes.length} · candidate owes ${candOwes.length} · click a row for full context`}
           empty="Every conversation got a reply. ✓"
         >
           {bossOwes.slice(0, 5).map(({ b, c }) => (
@@ -2060,7 +2075,7 @@ function AlertsView({
           empty="No unhappy bosses in scope. ✓"
         >
           {unhappy.slice(0, 8).map((b) => (
-            <BossAlertRow key={b.id} boss={b} reason={b.alert ?? bossOneLine(b)} onOpen={onOpen} whatsapp={!readOnly} />
+            <BossAlertRow key={b.id} boss={b} reason={unhappyReason(b)} onOpen={onOpen} whatsapp={!readOnly} />
           ))}
         </AlertGroup>
       )}
@@ -2420,43 +2435,41 @@ function StuckRow({ boss, mins, onOpen, stageOverride }: { boss: Boss; mins: num
 }
 
 function NoReplyRow({
-  boss, chat, side, mins, stage, onOpenBoss, readOnly,
+  boss, chat, side, mins, onOpenBoss,
 }: {
   boss: Boss;
   chat: CandidateChat;
   side: "boss" | "candidate";
   mins: number;
-  stage: "pn" | "wati" | "stale";
+  stage?: "pn" | "wati" | "stale";
   onOpenBoss: (b: Boss) => void;
   readOnly?: boolean;
 }) {
-  const stageLabel =
-    stage === "stale" ? "WATI sent · still no reply" :
-    stage === "wati"  ? "WATI auto-sent" :
-                        "PN sent";
+  const owesName = side === "boss" ? boss.name : chat.candidateName;
+  const owesSub  = side === "boss" ? `${boss.company} · ${boss.role}` : `Candidate · for ${chat.forRole}`;
+  const waitingOn = side === "boss" ? chat.candidateName : `${boss.name} (${boss.company})`;
   const sideLabel = side === "boss" ? "Boss owes reply" : "Candidate owes reply";
   const sideTone = side === "boss"
     ? "text-destructive border-destructive/30 bg-destructive/10"
     : "text-warn border-warn/30 bg-warn/10";
   return (
-    <div className="flex items-center gap-3 p-3 rounded-xl border border-border bg-surface/60">
+    <button
+      onClick={() => onOpenBoss(boss)}
+      className="w-full flex items-center gap-3 p-3 rounded-xl border border-border bg-surface/60 hover:bg-surface text-left transition-colors"
+    >
       <div className={`size-10 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${side === "boss" ? "bg-destructive/10 text-destructive" : "bg-warn/10 text-warn"}`}>
-        {initials(side === "boss" ? boss.name : chat.candidateName)}
+        {initials(owesName)}
       </div>
-      <button onClick={() => onOpenBoss(boss)} className="flex-1 min-w-0 text-left">
+      <div className="flex-1 min-w-0">
         <div className="font-semibold text-sm truncate">
-          {boss.name} <span className="text-muted-foreground font-normal">· {boss.company}</span>
+          {owesName} <span className="text-muted-foreground font-normal">· {owesSub}</span>
         </div>
         <div className="text-[11px] text-muted-foreground truncate">
-          {side === "boss" ? "Owes" : "Awaiting"} <span className="font-semibold text-foreground">{chat.candidateName}</span> on {chat.forRole} · last msg {fmtSince(mins)} · "{chat.lastMessage}"
+          Waiting on reply to <span className="font-semibold text-foreground">{waitingOn}</span> · {fmtSince(mins)} · "{chat.lastMessage}"
         </div>
-      </button>
-      <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
-        <span className={`text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border ${sideTone}`}>{sideLabel}</span>
-        <span className="text-[9px] text-muted-foreground font-mono">{stageLabel}</span>
       </div>
-      {!readOnly && <WhatsAppBtn label={side === "boss" ? "Nudge boss" : "Nudge cand"} />}
-    </div>
+      <span className={`hidden sm:inline-block text-[9px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded border shrink-0 ${sideTone}`}>{sideLabel}</span>
+    </button>
   );
 }
 
