@@ -152,6 +152,18 @@ function bossOneLine(b: Boss): string {
   return `${b.stage} · ${progressing} of ${total || progressing} progressing · last reply ${lastTxt}`;
 }
 
+function unhappyReason(b: Boss): string {
+  if (b.alert) return b.alert;
+  // Most recent negative close reason on any of their chats
+  const closed = b.candidateChats
+    .filter((c) => c.status === "closed" && c.closeReason)
+    .sort((a, z) => z.lastTs - a.lastTs)[0];
+  if (closed?.closeReason) return `Closed "${closed.candidateName}" — ${closed.closeReason}`;
+  const days = parseDays(b.lastActivity);
+  if (days >= 3) return `Silent ${Math.round(days)}d after a bad experience`;
+  if (b.notHired > 0 && b.hired === 0) return `${b.notHired} rejections, 0 hires — losing faith in the pool`;
+  return `Sentiment flagged unhappy — needs a direct call`;
+}
 function ctaForBoss(b: Boss): { label: string; tone: "primary" | "warn" | "destructive" } {
   if (b.status === "no_reply" || (b.alert && /no reply|ghost/i.test(b.alert))) {
     return { label: "Send nudge", tone: "destructive" };
