@@ -2075,7 +2075,7 @@ function AlertsView({
           empty="No unhappy bosses in scope. ✓"
         >
           {unhappy.slice(0, 8).map((b) => (
-            <BossAlertRow key={b.id} boss={b} reason={b.alert ?? bossOneLine(b)} onOpen={onOpen} whatsapp={!readOnly} />
+            <BossAlertRow key={b.id} boss={b} reason={unhappyReason(b)} onOpen={onOpen} whatsapp={!readOnly} />
           ))}
         </AlertGroup>
       )}
