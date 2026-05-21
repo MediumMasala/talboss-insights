@@ -2035,7 +2035,7 @@ function AlertsView({
         <AlertGroup
           tone="critical"
           title="No reply"
-          hint={`Boss owes ${bossOwes.length} · candidate owes ${candOwes.length} · already past PN (10m) + WATI (70m)`}
+          hint={`Boss owes ${bossOwes.length} · candidate owes ${candOwes.length} · click a row for full context`}
           empty="Every conversation got a reply. ✓"
         >
           {bossOwes.slice(0, 5).map(({ b, c }) => (
