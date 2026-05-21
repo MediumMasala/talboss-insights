@@ -1920,11 +1920,14 @@ function AlertsView({
   readOnly?: boolean;
   stageFilter?: Stage | "all";
 }) {
-  // Funnel groups for the alerts strip — Identity + Personality + Verification clubbed under Onboarding
-  type StageGroup = "Onboarding" | "Job Setup" | "Talking" | "Chatting" | "Closing";
-  const STAGE_GROUPS: StageGroup[] = ["Onboarding", "Job Setup", "Talking", "Chatting", "Closing"];
+  // Funnel groups for the alerts strip — Identity + Personality + Verification clubbed under Onboarding;
+  // Talking + Chatting merged under a single "Talking" group (same conversation surface)
+  type StageGroup = "Onboarding" | "Job Setup" | "Talking" | "Closing";
+  const STAGE_GROUPS: StageGroup[] = ["Onboarding", "Job Setup", "Talking", "Closing"];
   const stagesIn = (g: StageGroup): Stage[] =>
-    g === "Onboarding" ? ["Identity", "Personality", "Verification"] : [g as Stage];
+    g === "Onboarding" ? ["Identity", "Personality", "Verification"] :
+    g === "Talking" ? ["Talking", "Chatting"] :
+    [g as Stage];
 
   type TabK = "all" | "no_reply" | "unhappy" | StageGroup;
   const [tab, setTab] = useState<TabK>("all");
