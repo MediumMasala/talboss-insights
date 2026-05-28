@@ -411,6 +411,7 @@ function Dashboard() {
     overview: "Alerts · bosses needing attention",
     tracker: "Trackers · live analytics",
     chats: "Chats · grouped by boss",
+    profiles: "Profiles · manage bosses & candidates",
   };
 
   return (
