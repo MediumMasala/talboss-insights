@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ALL_CHATS,
@@ -6,14 +6,17 @@ import {
   NEGATIVE_CLOSE,
   OWNERS,
   POSITIVE_CLOSE,
+  SOURCES,
   STAGES,
   bossById,
+  bossSource,
   type Boss,
   type CandidateChat,
   type ChatStatus,
   type CloseReason,
   type OpenRole,
   type Sentiment,
+  type Source,
   type Stage,
 } from "@/lib/talboss-data";
 
