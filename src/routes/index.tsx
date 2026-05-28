@@ -357,6 +357,20 @@ function chatJourneyIndex(c: CandidateChat): number {
   return 0;
 }
 
+function seedLogs(): AdminLog[] {
+  const now = Date.now();
+  const m = (mins: number) => now - mins * 60_000;
+  return [
+    { ts: m(8),   actor: "YS", action: "tagged Aman Gupta as priority · boAt Lifestyle" },
+    { ts: m(22),  actor: "GJ", action: "reassigned Nithin Kamath (Zerodha) · YS → GJ" },
+    { ts: m(40),  actor: "GT", action: "closed chat for Deepinder Goyal · reason: Comp mismatch" },
+    { ts: m(74),  actor: "SJ", action: "marked Rohit Bansal incomplete (no work email)" },
+    { ts: m(110), actor: "GJ", action: "tagged Ravi Sharma as 'unhappy' · escalated" },
+    { ts: m(180), actor: "YS", action: "created new candidate profile · Aman Bhat" },
+    { ts: m(240), actor: "GT", action: "switched Karthik Iyer · boss → candidate" },
+  ];
+}
+
 function Dashboard() {
   const [section, setSection] = useState<Section>("overview");
   const [view, setView] = useState<View>("mine");
