@@ -38,11 +38,34 @@ type View = "mine" | "admin";
 type SearchScope = "all" | "name" | "company" | "id" | "location" | "owner";
 
 /* ---------- Funnel stage playbooks (steps to follow per stage) ---------- */
+/* Aligned to the Figma onboarding flow:
+   Identity → Personality (profile setup) → Verification → Job Setup (boss fork)
+   → Talking + Chatting (same surface) → Closing. */
 const STAGE_STEPS: Record<Stage, string[]> = {
-  Identity: ["Name added", "Company & role added", "LinkedIn confirmed", "Phone & email confirmed"],
-  Personality: ["Photos uploaded", "Prompts answered", "AI stack added", "tal.af/workwith page live"],
-  "Job Setup": ["Job title set", "Role & seniority", "Salary & comp", "Location & type"],
-  Verification: ["Work email submitted", "OTP confirmed", "Domain matched", "Verified badge granted"],
+  Identity: [
+    "Name captured (chat)",
+    "Company added",
+    "Role / designation added",
+    "LinkedIn profile confirmed",
+  ],
+  Personality: [
+    "Headshot uploaded",
+    "Bio added (suggested / written / voice note)",
+    "Career journey double-checked",
+    "First standout answer written",
+  ],
+  Verification: [
+    "Verify route picked (LinkedIn or work email)",
+    "Work email OTP sent",
+    "OTP confirmed · domain matched",
+    "Verified badge granted",
+  ],
+  "Job Setup": [
+    '"What brings you to tal?" answered (boss fork)',
+    "Opportunity added (title · comp · location · mode)",
+    "Ideal candidate described",
+    "2 standout answers for the role saved",
+  ],
   Talking: ["Shortlist surfaced", "Intro DM sent", "Candidate accepted DM", "First reply within 2h"],
   Chatting: ["Resume shared", "Slots shared", "Call/interview held", "Feedback captured"],
   Closing: ["Match outcome given", "Chat closed with reason", "Hire/no-hire logged", "Slot freed (≤10 open)"],
