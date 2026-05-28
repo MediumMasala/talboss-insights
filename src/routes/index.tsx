@@ -118,8 +118,75 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
   unhappy: { label: "Unhappy", cls: "text-warn" },
 };
 
-type Section = "overview" | "tracker" | "chats";
+type Section = "overview" | "tracker" | "chats" | "profiles";
 type Severity = "critical" | "warning" | "nudge" | "healthy";
+
+/* ---------- Ops context (closures, reassignments, profile overrides, logs) ---------- */
+export type ProfileType = "boss" | "candidate";
+export interface ProfileOverride {
+  type?: ProfileType;
+  complete?: boolean;
+  name?: string;
+  company?: string;
+  role?: string;
+  bio?: string;
+  deleted?: boolean;
+}
+export interface OpsClosure {
+  reason: CloseReason;
+  note?: string;
+  by: string; // owner initials
+  at: number;
+}
+export interface NewProfile {
+  id: string;
+  name: string;
+  company: string;
+  role: string;
+  type: ProfileType;
+  complete: boolean;
+  bio?: string;
+  createdBy: string;
+  createdAt: number;
+}
+export interface AdminLog {
+  ts: number;
+  actor: string;
+  action: string;
+}
+
+interface OpsCtx {
+  me: string;
+  opsClosures: Record<string, OpsClosure>;
+  closeChatAsOps: (chatId: string, bossName: string, reason: CloseReason, note?: string) => void;
+  reassignments: Record<string, string>;
+  reassignBoss: (b: Boss, toInitials: string) => void;
+  profileOverrides: Record<string, ProfileOverride>;
+  updateProfile: (bossId: string, patch: ProfileOverride) => void;
+  newProfiles: NewProfile[];
+  createProfile: (p: Omit<NewProfile, "id" | "createdAt" | "createdBy">) => void;
+  deleteProfile: (id: string) => void;
+  logs: AdminLog[];
+  addLog: (action: string) => void;
+}
+
+const OpsContext = createContext<OpsCtx | null>(null);
+function useOps(): OpsCtx {
+  const v = useContext(OpsContext);
+  if (!v) throw new Error("OpsContext missing");
+  return v;
+}
+
+/** Effective owner (after reassignment). */
+function ownerOf(b: Boss, reassignments: Record<string, string>): string {
+  return reassignments[b.id] ?? b.ownerInitials;
+}
+/** Effective chat status (after Ops closure). */
+function effectiveChatStatus(c: CandidateChat, closures: Record<string, OpsClosure>): { status: "open" | "closed"; closeReason?: CloseReason; opsClosed: boolean } {
+  const op = closures[c.id];
+  if (op) return { status: "closed", closeReason: op.reason, opsClosed: true };
+  return { status: c.status, closeReason: c.closeReason, opsClosed: false };
+}
 
 /* ---------- Health + severity helpers ---------- */
 function parseDays(s: string): number {
