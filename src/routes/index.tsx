@@ -475,6 +475,7 @@ function Dashboard() {
   };
 
   return (
+    <OpsContext.Provider value={opsValue}>
     <div className="min-h-dvh bg-background text-foreground flex">
       <SideNav
         section={section}
@@ -513,8 +514,6 @@ function Dashboard() {
         />
 
         <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
-          {/* Goal banner removed per ops feedback */}
-
           <BossGPT
             bosses={interviewFiltered}
             onApply={(f) => {
@@ -527,11 +526,15 @@ function Dashboard() {
             }}
           />
 
+          {view === "admin" && <AdminConsole bosses={filtered} onOpenBoss={setSelected} />}
+
           <SectionHeader
             title={sectionTitle[section]}
             subtitle={
               section === "chats"
                 ? `${interviewFiltered.flatMap((b) => b.candidateChats).length} chats across ${interviewFiltered.length} bosses`
+                : section === "profiles"
+                ? `${interviewFiltered.length + newProfiles.length} profiles in scope`
                 : `${interviewFiltered.length} bosses in scope · ${alertBosses.length} need attention`
             }
           />
@@ -549,6 +552,9 @@ function Dashboard() {
           {section === "chats" && (
             <ChatStream bosses={interviewFiltered} onOpenBoss={setSelected} />
           )}
+          {section === "profiles" && (
+            <ProfilesPanel bosses={interviewFiltered} onOpenBoss={setSelected} />
+          )}
         </main>
       </div>
 
@@ -558,10 +564,7 @@ function Dashboard() {
           title={trackerDrill.title}
           bosses={trackerDrill.bosses}
           onClose={() => setTrackerDrill(null)}
-          onOpenBoss={(b) => {
-            setTrackerDrill(null);
-            setSelected(b);
-          }}
+          onOpenBoss={(b) => { setTrackerDrill(null); setSelected(b); }}
         />
       )}
       {chatDrill && (
@@ -569,13 +572,11 @@ function Dashboard() {
           title={chatDrill.title}
           chats={chatDrill.chats}
           onClose={() => setChatDrill(null)}
-          onOpenBoss={(b) => {
-            setChatDrill(null);
-            setSelected(b);
-          }}
+          onOpenBoss={(b) => { setChatDrill(null); setSelected(b); }}
         />
       )}
     </div>
+    </OpsContext.Provider>
   );
 }
 
