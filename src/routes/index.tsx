@@ -373,6 +373,52 @@ function Dashboard() {
   const [trackerDrill, setTrackerDrill] = useState<{ title: string; bosses: Boss[] } | null>(null);
   const [chatDrill, setChatDrill] = useState<{ title: string; chats: CandidateChat[] } | null>(null);
 
+  /* ---- Ops state ---- */
+  const [opsClosures, setOpsClosures] = useState<Record<string, OpsClosure>>({});
+  const [reassignments, setReassignments] = useState<Record<string, string>>({});
+  const [profileOverrides, setProfileOverrides] = useState<Record<string, ProfileOverride>>({});
+  const [newProfiles, setNewProfiles] = useState<NewProfile[]>([]);
+  const [logs, setLogs] = useState<AdminLog[]>(() => seedLogs());
+
+  const addLog = (action: string) =>
+    setLogs((prev) => [{ ts: Date.now(), actor: me, action }, ...prev].slice(0, 200));
+
+  const closeChatAsOps: OpsCtx["closeChatAsOps"] = (chatId, bossName, reason, note) => {
+    setOpsClosures((prev) => ({ ...prev, [chatId]: { reason, note, by: me, at: Date.now() } }));
+    addLog(`closed chat for ${bossName} · reason: ${reason}${note ? ` · "${note}"` : ""}`);
+  };
+  const reassignBoss: OpsCtx["reassignBoss"] = (b, to) => {
+    setReassignments((prev) => ({ ...prev, [b.id]: to }));
+    addLog(`reassigned ${b.name} (${b.company}) · ${b.ownerInitials} → ${to}`);
+  };
+  const updateProfile: OpsCtx["updateProfile"] = (bossId, patch) => {
+    setProfileOverrides((prev) => ({ ...prev, [bossId]: { ...prev[bossId], ...patch } }));
+    const labels = Object.keys(patch).join(", ");
+    const b = BOSSES.find((x) => x.id === bossId);
+    if (patch.deleted) addLog(`deleted profile · ${b?.name ?? bossId}`);
+    else if (patch.type) addLog(`switched ${b?.name ?? bossId} → ${patch.type}`);
+    else if (patch.complete !== undefined) addLog(`marked ${b?.name ?? bossId} ${patch.complete ? "complete" : "incomplete"}`);
+    else addLog(`edited profile · ${b?.name ?? bossId} (${labels})`);
+  };
+  const createProfile: OpsCtx["createProfile"] = (p) => {
+    const id = `NP-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    setNewProfiles((prev) => [{ ...p, id, createdAt: Date.now(), createdBy: me }, ...prev]);
+    addLog(`created new ${p.type} profile · ${p.name} (${p.company})`);
+  };
+  const deleteProfile: OpsCtx["deleteProfile"] = (id) => {
+    const np = newProfiles.find((x) => x.id === id);
+    setNewProfiles((prev) => prev.filter((x) => x.id !== id));
+    if (np) addLog(`deleted new profile · ${np.name}`);
+  };
+
+  const opsValue: OpsCtx = {
+    me, opsClosures, closeChatAsOps,
+    reassignments, reassignBoss,
+    profileOverrides, updateProfile,
+    newProfiles, createProfile, deleteProfile,
+    logs, addLog,
+  };
+
   const filtered = useMemo(() => {
     return BOSSES.filter((b) => {
       if (view === "mine" && b.ownerInitials !== me) return false;
