@@ -129,6 +129,33 @@ export const OWNERS: Owner[] = [
   { initials: "GT", name: "Gaurav Tiwari", role: "Senior Ops" },
 ];
 
+/* ---------- Acquisition sources ---------- */
+export type Source =
+  | "UGC"
+  | "Sweets"
+  | "Website"
+  | "Community"
+  | "Campaign 1"
+  | "Campaign 2"
+  | "Campaign 3";
+
+export const SOURCES: Source[] = [
+  "UGC",
+  "Sweets",
+  "Website",
+  "Community",
+  "Campaign 1",
+  "Campaign 2",
+  "Campaign 3",
+];
+
+/** Deterministic source per boss id so demo data is stable across renders. */
+export function bossSource(bossId: string): Source {
+  let h = 0;
+  for (let i = 0; i < bossId.length; i++) h = (h * 31 + bossId.charCodeAt(i)) | 0;
+  return SOURCES[Math.abs(h) % SOURCES.length];
+}
+
 const NOW = Date.now();
 const min = (m: number) => NOW - m * 60_000;
 const hr = (h: number) => NOW - h * 3_600_000;

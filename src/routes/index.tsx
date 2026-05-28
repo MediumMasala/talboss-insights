@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import {
   ALL_CHATS,
@@ -6,14 +6,17 @@ import {
   NEGATIVE_CLOSE,
   OWNERS,
   POSITIVE_CLOSE,
+  SOURCES,
   STAGES,
   bossById,
+  bossSource,
   type Boss,
   type CandidateChat,
   type ChatStatus,
   type CloseReason,
   type OpenRole,
   type Sentiment,
+  type Source,
   type Stage,
 } from "@/lib/talboss-data";
 
@@ -35,11 +38,34 @@ type View = "mine" | "admin";
 type SearchScope = "all" | "name" | "company" | "id" | "location" | "owner";
 
 /* ---------- Funnel stage playbooks (steps to follow per stage) ---------- */
+/* Aligned to the Figma onboarding flow:
+   Identity → Personality (profile setup) → Verification → Job Setup (boss fork)
+   → Talking + Chatting (same surface) → Closing. */
 const STAGE_STEPS: Record<Stage, string[]> = {
-  Identity: ["Name added", "Company & role added", "LinkedIn confirmed", "Phone & email confirmed"],
-  Personality: ["Photos uploaded", "Prompts answered", "AI stack added", "tal.af/workwith page live"],
-  "Job Setup": ["Job title set", "Role & seniority", "Salary & comp", "Location & type"],
-  Verification: ["Work email submitted", "OTP confirmed", "Domain matched", "Verified badge granted"],
+  Identity: [
+    "Name captured (chat)",
+    "Company added",
+    "Role / designation added",
+    "LinkedIn profile confirmed",
+  ],
+  Personality: [
+    "Headshot uploaded",
+    "Bio added (suggested / written / voice note)",
+    "Career journey double-checked",
+    "First standout answer written",
+  ],
+  Verification: [
+    "Verify route picked (LinkedIn or work email)",
+    "Work email OTP sent",
+    "OTP confirmed · domain matched",
+    "Verified badge granted",
+  ],
+  "Job Setup": [
+    '"What brings you to tal?" answered (boss fork)',
+    "Opportunity added (title · comp · location · mode)",
+    "Ideal candidate described",
+    "2 standout answers for the role saved",
+  ],
   Talking: ["Shortlist surfaced", "Intro DM sent", "Candidate accepted DM", "First reply within 2h"],
   Chatting: ["Resume shared", "Slots shared", "Call/interview held", "Feedback captured"],
   Closing: ["Match outcome given", "Chat closed with reason", "Hire/no-hire logged", "Slot freed (≤10 open)"],
@@ -92,8 +118,75 @@ const sentimentMeta: Record<Sentiment, { label: string; cls: string }> = {
   unhappy: { label: "Unhappy", cls: "text-warn" },
 };
 
-type Section = "overview" | "tracker" | "chats";
+type Section = "overview" | "tracker" | "chats" | "profiles";
 type Severity = "critical" | "warning" | "nudge" | "healthy";
+
+/* ---------- Ops context (closures, reassignments, profile overrides, logs) ---------- */
+export type ProfileType = "boss" | "candidate";
+export interface ProfileOverride {
+  type?: ProfileType;
+  complete?: boolean;
+  name?: string;
+  company?: string;
+  role?: string;
+  bio?: string;
+  deleted?: boolean;
+}
+export interface OpsClosure {
+  reason: CloseReason;
+  note?: string;
+  by: string; // owner initials
+  at: number;
+}
+export interface NewProfile {
+  id: string;
+  name: string;
+  company: string;
+  role: string;
+  type: ProfileType;
+  complete: boolean;
+  bio?: string;
+  createdBy: string;
+  createdAt: number;
+}
+export interface AdminLog {
+  ts: number;
+  actor: string;
+  action: string;
+}
+
+interface OpsCtx {
+  me: string;
+  opsClosures: Record<string, OpsClosure>;
+  closeChatAsOps: (chatId: string, bossName: string, reason: CloseReason, note?: string) => void;
+  reassignments: Record<string, string>;
+  reassignBoss: (b: Boss, toInitials: string) => void;
+  profileOverrides: Record<string, ProfileOverride>;
+  updateProfile: (bossId: string, patch: ProfileOverride) => void;
+  newProfiles: NewProfile[];
+  createProfile: (p: Omit<NewProfile, "id" | "createdAt" | "createdBy">) => void;
+  deleteProfile: (id: string) => void;
+  logs: AdminLog[];
+  addLog: (action: string) => void;
+}
+
+const OpsContext = createContext<OpsCtx | null>(null);
+function useOps(): OpsCtx {
+  const v = useContext(OpsContext);
+  if (!v) throw new Error("OpsContext missing");
+  return v;
+}
+
+/** Effective owner (after reassignment). */
+function ownerOf(b: Boss, reassignments: Record<string, string>): string {
+  return reassignments[b.id] ?? b.ownerInitials;
+}
+/** Effective chat status (after Ops closure). */
+function effectiveChatStatus(c: CandidateChat, closures: Record<string, OpsClosure>): { status: "open" | "closed"; closeReason?: CloseReason; opsClosed: boolean } {
+  const op = closures[c.id];
+  if (op) return { status: "closed", closeReason: op.reason, opsClosed: true };
+  return { status: c.status, closeReason: c.closeReason, opsClosed: false };
+}
 
 /* ---------- Health + severity helpers ---------- */
 function parseDays(s: string): number {
@@ -264,6 +357,20 @@ function chatJourneyIndex(c: CandidateChat): number {
   return 0;
 }
 
+function seedLogs(): AdminLog[] {
+  const now = Date.now();
+  const m = (mins: number) => now - mins * 60_000;
+  return [
+    { ts: m(8),   actor: "YS", action: "tagged Aman Gupta as priority · boAt Lifestyle" },
+    { ts: m(22),  actor: "GJ", action: "reassigned Nithin Kamath (Zerodha) · YS → GJ" },
+    { ts: m(40),  actor: "GT", action: "closed chat for Deepinder Goyal · reason: Comp mismatch" },
+    { ts: m(74),  actor: "SJ", action: "marked Rohit Bansal incomplete (no work email)" },
+    { ts: m(110), actor: "GJ", action: "tagged Ravi Sharma as 'unhappy' · escalated" },
+    { ts: m(180), actor: "YS", action: "created new candidate profile · Aman Bhat" },
+    { ts: m(240), actor: "GT", action: "switched Karthik Iyer · boss → candidate" },
+  ];
+}
+
 function Dashboard() {
   const [section, setSection] = useState<Section>("overview");
   const [view, setView] = useState<View>("mine");
@@ -279,6 +386,52 @@ function Dashboard() {
   const [selected, setSelected] = useState<Boss | null>(null);
   const [trackerDrill, setTrackerDrill] = useState<{ title: string; bosses: Boss[] } | null>(null);
   const [chatDrill, setChatDrill] = useState<{ title: string; chats: CandidateChat[] } | null>(null);
+
+  /* ---- Ops state ---- */
+  const [opsClosures, setOpsClosures] = useState<Record<string, OpsClosure>>({});
+  const [reassignments, setReassignments] = useState<Record<string, string>>({});
+  const [profileOverrides, setProfileOverrides] = useState<Record<string, ProfileOverride>>({});
+  const [newProfiles, setNewProfiles] = useState<NewProfile[]>([]);
+  const [logs, setLogs] = useState<AdminLog[]>(() => seedLogs());
+
+  const addLog = (action: string) =>
+    setLogs((prev) => [{ ts: Date.now(), actor: me, action }, ...prev].slice(0, 200));
+
+  const closeChatAsOps: OpsCtx["closeChatAsOps"] = (chatId, bossName, reason, note) => {
+    setOpsClosures((prev) => ({ ...prev, [chatId]: { reason, note, by: me, at: Date.now() } }));
+    addLog(`closed chat for ${bossName} · reason: ${reason}${note ? ` · "${note}"` : ""}`);
+  };
+  const reassignBoss: OpsCtx["reassignBoss"] = (b, to) => {
+    setReassignments((prev) => ({ ...prev, [b.id]: to }));
+    addLog(`reassigned ${b.name} (${b.company}) · ${b.ownerInitials} → ${to}`);
+  };
+  const updateProfile: OpsCtx["updateProfile"] = (bossId, patch) => {
+    setProfileOverrides((prev) => ({ ...prev, [bossId]: { ...prev[bossId], ...patch } }));
+    const labels = Object.keys(patch).join(", ");
+    const b = BOSSES.find((x) => x.id === bossId);
+    if (patch.deleted) addLog(`deleted profile · ${b?.name ?? bossId}`);
+    else if (patch.type) addLog(`switched ${b?.name ?? bossId} → ${patch.type}`);
+    else if (patch.complete !== undefined) addLog(`marked ${b?.name ?? bossId} ${patch.complete ? "complete" : "incomplete"}`);
+    else addLog(`edited profile · ${b?.name ?? bossId} (${labels})`);
+  };
+  const createProfile: OpsCtx["createProfile"] = (p) => {
+    const id = `NP-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    setNewProfiles((prev) => [{ ...p, id, createdAt: Date.now(), createdBy: me }, ...prev]);
+    addLog(`created new ${p.type} profile · ${p.name} (${p.company})`);
+  };
+  const deleteProfile: OpsCtx["deleteProfile"] = (id) => {
+    const np = newProfiles.find((x) => x.id === id);
+    setNewProfiles((prev) => prev.filter((x) => x.id !== id));
+    if (np) addLog(`deleted new profile · ${np.name}`);
+  };
+
+  const opsValue: OpsCtx = {
+    me, opsClosures, closeChatAsOps,
+    reassignments, reassignBoss,
+    profileOverrides, updateProfile,
+    newProfiles, createProfile, deleteProfile,
+    logs, addLog,
+  };
 
   const filtered = useMemo(() => {
     return BOSSES.filter((b) => {
@@ -318,9 +471,11 @@ function Dashboard() {
     overview: "Alerts · bosses needing attention",
     tracker: "Trackers · live analytics",
     chats: "Chats · grouped by boss",
+    profiles: "Profiles · manage bosses & candidates",
   };
 
   return (
+    <OpsContext.Provider value={opsValue}>
     <div className="min-h-dvh bg-background text-foreground flex">
       <SideNav
         section={section}
@@ -359,8 +514,6 @@ function Dashboard() {
         />
 
         <main className="px-6 py-6 max-w-[1600px] mx-auto space-y-5">
-          {/* Goal banner removed per ops feedback */}
-
           <BossGPT
             bosses={interviewFiltered}
             onApply={(f) => {
@@ -373,11 +526,15 @@ function Dashboard() {
             }}
           />
 
+          {view === "admin" && <AdminConsole bosses={filtered} onOpenBoss={setSelected} />}
+
           <SectionHeader
             title={sectionTitle[section]}
             subtitle={
               section === "chats"
                 ? `${interviewFiltered.flatMap((b) => b.candidateChats).length} chats across ${interviewFiltered.length} bosses`
+                : section === "profiles"
+                ? `${interviewFiltered.length + newProfiles.length} profiles in scope`
                 : `${interviewFiltered.length} bosses in scope · ${alertBosses.length} need attention`
             }
           />
@@ -395,6 +552,9 @@ function Dashboard() {
           {section === "chats" && (
             <ChatStream bosses={interviewFiltered} onOpenBoss={setSelected} />
           )}
+          {section === "profiles" && (
+            <ProfilesPanel bosses={interviewFiltered} onOpenBoss={setSelected} />
+          )}
         </main>
       </div>
 
@@ -404,10 +564,7 @@ function Dashboard() {
           title={trackerDrill.title}
           bosses={trackerDrill.bosses}
           onClose={() => setTrackerDrill(null)}
-          onOpenBoss={(b) => {
-            setTrackerDrill(null);
-            setSelected(b);
-          }}
+          onOpenBoss={(b) => { setTrackerDrill(null); setSelected(b); }}
         />
       )}
       {chatDrill && (
@@ -415,13 +572,11 @@ function Dashboard() {
           title={chatDrill.title}
           chats={chatDrill.chats}
           onClose={() => setChatDrill(null)}
-          onOpenBoss={(b) => {
-            setChatDrill(null);
-            setSelected(b);
-          }}
+          onOpenBoss={(b) => { setChatDrill(null); setSelected(b); }}
         />
       )}
     </div>
+    </OpsContext.Provider>
   );
 }
 
@@ -457,6 +612,11 @@ function SideNav({
       label: "Chats",
       badge: chatCount,
       icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>),
+    },
+    {
+      key: "profiles",
+      label: "Profiles",
+      icon: (<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="size-4"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>),
     },
   ];
 
